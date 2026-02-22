@@ -1,4 +1,4 @@
-# sqlite3StatisticalLibrary — Statistical Functions for SQLite3
+# Statistical Functions for SQLite3
 
 A loadable extension that adds **249 statistical functions** to SQLite3.
 

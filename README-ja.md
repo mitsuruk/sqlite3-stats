@@ -1,4 +1,4 @@
-# sqlite3StatisticalLibrary — SQLite3 用統計関数ライブラリ
+# SQLite3 用統計関数ライブラリ
 
 SQLite3 に **249 個の統計関数** を追加するロード可能な拡張機能です。
 
