@@ -1,0 +1,472 @@
+# SQLite3 統計関数ライブラリ — 関数リファレンス
+
+## 概要
+
+本ライブラリは SQLite3 の `LOAD_EXTENSION` 機能を使い、統計関数群を SQL から直接利用可能にする拡張モジュールである。
+
+本リファレンスでは **全249関数** を記載している。
+
+| カテゴリ | 関数数 | 説明 |
+|---|---|---|
+| [基本集約関数](ref/basic_aggregates-ja.md) | 24 | 1カラム集約: `SELECT stat_xxx(col) FROM table` |
+| [パラメータ付き集約関数](ref/parameterized_aggregates-ja.md) | 20 | 引数付き集約: `SELECT stat_xxx(col, param) FROM table` |
+| [2カラム集約関数](ref/two_column_aggregates-ja.md) | 27 | 2列入力集約: `SELECT stat_xxx(col1, col2) FROM table` |
+| [ウィンドウ関数](ref/window_functions-ja.md) | 23 | 行ごとに値を返す全行スキャン型ウィンドウ関数 |
+| [複合集約関数](ref/complex_aggregates-ja.md) | 32 | JSON結果を返す集約関数、2標本検定、生存時間解析等 |
+| [スカラー関数 — 検定補助](ref/scalar_tests_helpers-ja.md) | 40 | DB非依存: 分布関数、特殊関数、比率検定、多重検定補正等 |
+| [スカラー関数 — 分布・変換](ref/scalar_distributions-ja.md) | 83 | DB非依存: 追加分布関数、効果量変換、検出力分析等 |
+
+- **基本集約関数〜2カラム集約関数**（71関数）はすべて**集約関数**であり、`GROUP BY`、`HAVING`、サブクエリなど SQLite3 の標準的な集約関数が使えるすべての文脈で利用可能。
+- **ウィンドウ関数**（23関数）は全行スキャン型として実装されており、各行に対して1つの値を返す。
+- **複合集約関数**（32関数）は**集約関数**（JSON 結果を返すものを含む）。
+- **スカラー関数**（123関数）はパラメータのみで計算が完結する。
+
+---
+
+## 拡張のロード方法
+
+### sqlite3 CLI からのロード
+
+```sql
+-- .load コマンド（推奨）
+.load ./ext_funcs sqlite3_ext_funcs_init
+
+-- load_extension() 関数
+SELECT load_extension('./ext_funcs', 'sqlite3_ext_funcs_init');
+```
+
+### C/C++ プログラムからのロード
+
+```cpp
+sqlite3_enable_load_extension(db, 1);
+sqlite3_load_extension(db, "./ext_funcs.dylib",
+                        "sqlite3_ext_funcs_init", &errmsg);
+```
+
+> **注意**: エントリポイント名 `sqlite3_ext_funcs_init` の明示指定が必要。SQLite の自動推定では `_` が除去されるため。
+
+---
+
+## 共通仕様
+
+### NULL の扱い
+
+- 入力値が `NULL` の行は**無視**される（SQLite3 の集約関数の慣例に準拠）
+- すべての行が `NULL` の場合、または結果セットが空の場合は `NULL` を返す
+- 計算結果が `NaN` または `Inf` になった場合は `NULL` を返す
+
+```sql
+-- NULL を含むデータ
+CREATE TABLE sample (val REAL);
+INSERT INTO sample VALUES (1), (NULL), (3), (NULL), (5);
+
+-- NULL は無視され、1, 3, 5 の3件で計算される
+SELECT stat_mean(val) FROM sample;
+-- → 3.0
+
+-- 全行 NULL
+SELECT stat_mean(NULL);
+-- → NULL
+
+-- 空の結果セット
+SELECT stat_mean(val) FROM sample WHERE val > 100;
+-- → NULL
+```
+
+### 最小データ数の要件
+
+一部の関数は計算に最低限必要なデータ数がある。データ数不足時は `NULL` を返す。
+
+| 関数 | 最小データ数 |
+|---|---|
+| `stat_sample_variance`, `stat_sample_stddev`, `stat_se`, `stat_cv` | 2 |
+| `stat_population_skewness`, `stat_skewness` | 3 |
+| `stat_population_kurtosis`, `stat_kurtosis` | 4 |
+| その他 | 1 |
+
+### GROUP BY との併用
+
+すべての集約関数は `GROUP BY` と併用可能。
+
+```sql
+SELECT category,
+       stat_mean(score)   AS mean_score,
+       stat_median(score) AS median_score,
+       stat_sample_stddev(score) AS stddev_score
+FROM exam_results
+GROUP BY category;
+```
+
+---
+
+## 関数一覧（早見表）
+
+### 基本集約関数（24関数）
+
+| 関数名 | 説明 | 戻り値 | 最小 n | 詳細 |
+|---|---|---|---|---|
+| `stat_mean(col)` | 算術平均 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_mean) |
+| `stat_median(col)` | 中央値 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_median) |
+| `stat_mode(col)` | 最頻値（最小値） | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_mode) |
+| `stat_geometric_mean(col)` | 幾何平均 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_geometric_mean) |
+| `stat_harmonic_mean(col)` | 調和平均 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_harmonic_mean) |
+| `stat_range(col)` | 範囲 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_range) |
+| `stat_var(col)` | 分散（母分散） | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_var) |
+| `stat_population_variance(col)` | 母分散 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_population_variance) |
+| `stat_sample_variance(col)` | 標本分散（不偏分散） | REAL | 2 | [詳細](ref/basic_aggregates-ja.md#stat_sample_variance) |
+| `stat_stdev(col)` | 標準偏差（母） | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_stdev) |
+| `stat_population_stddev(col)` | 母標準偏差 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_population_stddev) |
+| `stat_sample_stddev(col)` | 標本標準偏差 | REAL | 2 | [詳細](ref/basic_aggregates-ja.md#stat_sample_stddev) |
+| `stat_cv(col)` | 変動係数 | REAL | 2 | [詳細](ref/basic_aggregates-ja.md#stat_cv) |
+| `stat_iqr(col)` | 四分位範囲 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_iqr) |
+| `stat_mad_mean(col)` | 平均偏差 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_mad_mean) |
+| `stat_geometric_stddev(col)` | 幾何標準偏差 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_geometric_stddev) |
+| `stat_population_skewness(col)` | 母歪度 | REAL | 3 | [詳細](ref/basic_aggregates-ja.md#stat_population_skewness) |
+| `stat_skewness(col)` | 標本歪度 | REAL | 3 | [詳細](ref/basic_aggregates-ja.md#stat_skewness) |
+| `stat_population_kurtosis(col)` | 母尖度（超過尖度） | REAL | 4 | [詳細](ref/basic_aggregates-ja.md#stat_population_kurtosis) |
+| `stat_kurtosis(col)` | 標本尖度（超過尖度） | REAL | 4 | [詳細](ref/basic_aggregates-ja.md#stat_kurtosis) |
+| `stat_se(col)` | 標準誤差 | REAL | 2 | [詳細](ref/basic_aggregates-ja.md#stat_se) |
+| `stat_mad(col)` | 中央絶対偏差 (MAD) | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_mad) |
+| `stat_mad_scaled(col)` | スケーリング MAD | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_mad_scaled) |
+| `stat_hodges_lehmann(col)` | Hodges-Lehmann 推定量 | REAL | 1 | [詳細](ref/basic_aggregates-ja.md#stat_hodges_lehmann) |
+
+### パラメータ付き集約関数（20関数）
+
+| 関数名 | 説明 | 戻り値 | 最小 n | 詳細 |
+|---|---|---|---|---|
+| `stat_trimmed_mean(col, proportion)` | トリム平均 | REAL | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_trimmed_mean) |
+| `stat_quartile(col)` | 四分位数 (Q1,Q2,Q3) | JSON | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_quartile) |
+| `stat_percentile(col, p)` | パーセンタイル | REAL | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_percentile) |
+| `stat_z_test(col, mu0, sigma)` | 1標本 z 検定 | JSON | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_z_test) |
+| `stat_t_test(col, mu0)` | 1標本 t 検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_t_test) |
+| `stat_chisq_gof_uniform(col)` | カイ二乗適合度検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_chisq_gof_uniform) |
+| `stat_shapiro_wilk(col)` | Shapiro-Wilk 検定 | JSON | 3 | [詳細](ref/parameterized_aggregates-ja.md#stat_shapiro_wilk) |
+| `stat_ks_test(col)` | KS 検定（正規性） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ks_test) |
+| `stat_wilcoxon(col, mu0)` | Wilcoxon 符号付順位検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_wilcoxon) |
+| `stat_ci_mean(col, confidence)` | 平均の信頼区間（t） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean) |
+| `stat_ci_mean_z(col, sigma, confidence)` | 平均の信頼区間（z） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean_z) |
+| `stat_ci_var(col, confidence)` | 分散の信頼区間 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_var) |
+| `stat_moe_mean(col, confidence)` | 平均の誤差マージン | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_moe_mean) |
+| `stat_cohens_d(col, mu0)` | Cohen's d（1標本） | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_cohens_d) |
+| `stat_hedges_g(col, mu0)` | Hedges' g（1標本） | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_hedges_g) |
+| `stat_acf_lag(col, lag)` | 自己相関係数 | REAL | lag+1 | [詳細](ref/parameterized_aggregates-ja.md#stat_acf_lag) |
+| `stat_biweight_midvar(col, c)` | Biweight Midvariance | REAL | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_biweight_midvar) |
+| `stat_bootstrap_mean(col, n)` | 平均のブートストラップ | JSON | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_bootstrap_mean) |
+| `stat_bootstrap_median(col, n)` | 中央値のブートストラップ | JSON | 1 | [詳細](ref/parameterized_aggregates-ja.md#stat_bootstrap_median) |
+| `stat_bootstrap_stddev(col, n)` | 標準偏差のブートストラップ | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_bootstrap_stddev) |
+
+### 2カラム集約関数（27関数）
+
+| 関数名 | 説明 | 戻り値 | 最小 n | 詳細 |
+|---|---|---|---|---|
+| `stat_population_covariance(x, y)` | 母共分散 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_population_covariance) |
+| `stat_covariance(x, y)` | 標本共分散 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_covariance) |
+| `stat_pearson_r(x, y)` | ピアソン相関係数 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_pearson_r) |
+| `stat_spearman_r(x, y)` | スピアマン順位相関 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_spearman_r) |
+| `stat_kendall_tau(x, y)` | ケンドール順位相関 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_kendall_tau) |
+| `stat_weighted_covariance(val, wt)` | 重み付き共分散 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_covariance) |
+| `stat_weighted_mean(val, wt)` | 重み付き平均 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_mean) |
+| `stat_weighted_harmonic_mean(val, wt)` | 重み付き調和平均 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_harmonic_mean) |
+| `stat_weighted_variance(val, wt)` | 重み付き分散 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_variance) |
+| `stat_weighted_stddev(val, wt)` | 重み付き標準偏差 | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_stddev) |
+| `stat_weighted_median(val, wt)` | 重み付き中央値 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_median) |
+| `stat_weighted_percentile(val, wt, p)` | 重み付きパーセンタイル | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_weighted_percentile) |
+| `stat_simple_regression(x, y)` | 単回帰分析 | JSON | 3 | [詳細](ref/two_column_aggregates-ja.md#stat_simple_regression) |
+| `stat_r_squared(actual, pred)` | 決定係数 R² | REAL | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_r_squared) |
+| `stat_adjusted_r_squared(actual, pred)` | 自由度調整済み R² | REAL | 3 | [詳細](ref/two_column_aggregates-ja.md#stat_adjusted_r_squared) |
+| `stat_t_test_paired(x, y)` | 対応のある t 検定 | JSON | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_t_test_paired) |
+| `stat_chisq_gof(obs, exp)` | カイ二乗適合度検定 | JSON | 2 | [詳細](ref/two_column_aggregates-ja.md#stat_chisq_gof) |
+| `stat_mae(actual, pred)` | 平均絶対誤差 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_mae) |
+| `stat_mse(actual, pred)` | 平均二乗誤差 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_mse) |
+| `stat_rmse(actual, pred)` | RMSE | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_rmse) |
+| `stat_mape(actual, pred)` | 平均絶対パーセント誤差 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_mape) |
+| `stat_euclidean_dist(a, b)` | ユークリッド距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_euclidean_dist) |
+| `stat_manhattan_dist(a, b)` | マンハッタン距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_manhattan_dist) |
+| `stat_cosine_sim(a, b)` | コサイン類似度 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_cosine_sim) |
+| `stat_cosine_dist(a, b)` | コサイン距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_cosine_dist) |
+| `stat_minkowski_dist(a, b, p)` | ミンコフスキー距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_minkowski_dist) |
+| `stat_chebyshev_dist(a, b)` | チェビシェフ距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_chebyshev_dist) |
+
+### ウィンドウ関数（23関数）
+
+| 関数名 | 説明 | 戻り値 | 詳細 |
+|---|---|---|---|
+| `stat_rolling_mean(col, window)` | ローリング平均 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rolling_mean) |
+| `stat_rolling_std(col, window)` | ローリング標準偏差 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rolling_std) |
+| `stat_rolling_min(col, window)` | ローリング最小値 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rolling_min) |
+| `stat_rolling_max(col, window)` | ローリング最大値 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rolling_max) |
+| `stat_rolling_sum(col, window)` | ローリング合計 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rolling_sum) |
+| `stat_moving_avg(col, window)` | 単純移動平均 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_moving_avg) |
+| `stat_ema(col, span)` | 指数移動平均 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_ema) |
+| `stat_rank(col)` | 順位変換 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_rank) |
+| `stat_fillna_mean(col)` | 平均値補完 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_fillna_mean) |
+| `stat_fillna_median(col)` | 中央値補完 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_fillna_median) |
+| `stat_fillna_ffill(col)` | 前方補完 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_fillna_ffill) |
+| `stat_fillna_bfill(col)` | 後方補完 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_fillna_bfill) |
+| `stat_fillna_interp(col)` | 線形補間 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_fillna_interp) |
+| `stat_label_encode(col)` | ラベルエンコーディング | REAL/行 | [詳細](ref/window_functions-ja.md#stat_label_encode) |
+| `stat_bin_width(col, n_bins)` | 等幅ビニング | REAL/行 | [詳細](ref/window_functions-ja.md#stat_bin_width) |
+| `stat_bin_freq(col, n_bins)` | 等頻度ビニング | REAL/行 | [詳細](ref/window_functions-ja.md#stat_bin_freq) |
+| `stat_lag(col, k)` | ラグ | REAL/行 | [詳細](ref/window_functions-ja.md#stat_lag) |
+| `stat_diff(col, order)` | 差分 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_diff) |
+| `stat_seasonal_diff(col, period)` | 季節差分 | REAL/行 | [詳細](ref/window_functions-ja.md#stat_seasonal_diff) |
+| `stat_outliers_iqr(col)` | 外れ値検出（IQR） | REAL/行 | [詳細](ref/window_functions-ja.md#stat_outliers_iqr) |
+| `stat_outliers_zscore(col)` | 外れ値検出（Zスコア） | REAL/行 | [詳細](ref/window_functions-ja.md#stat_outliers_zscore) |
+| `stat_outliers_mzscore(col)` | 外れ値検出（修正Z） | REAL/行 | [詳細](ref/window_functions-ja.md#stat_outliers_mzscore) |
+| `stat_winsorize(col, pct)` | ウィンザライズ | REAL/行 | [詳細](ref/window_functions-ja.md#stat_winsorize) |
+
+### 複合集約関数（32関数）
+
+| 関数名 | 説明 | 戻り値 | 詳細 |
+|---|---|---|---|
+| `stat_modes(col)` | 最頻値（すべて） | JSON | [詳細](ref/complex_aggregates-ja.md#stat_modes) |
+| `stat_five_number_summary(col)` | 五数要約 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_five_number_summary) |
+| `stat_frequency_table(col)` | 度数表 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_frequency_table) |
+| `stat_frequency_count(col)` | 各値の度数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_frequency_count) |
+| `stat_relative_frequency(col)` | 相対度数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_relative_frequency) |
+| `stat_cumulative_frequency(col)` | 累積度数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_cumulative_frequency) |
+| `stat_cumulative_relative_frequency(col)` | 累積相対度数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_cumulative_relative_frequency) |
+| `stat_t_test2(grp1, grp2)` | 2標本 t 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_t_test2) |
+| `stat_t_test_welch(grp1, grp2)` | Welch t 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_t_test_welch) |
+| `stat_chisq_independence(col1, col2)` | カイ二乗独立性検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_chisq_independence) |
+| `stat_f_test(grp1, grp2)` | F 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_f_test) |
+| `stat_mann_whitney(grp1, grp2)` | Mann-Whitney U 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_mann_whitney) |
+| `stat_anova1(val, grp)` | 一元配置分散分析 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_anova1) |
+| `stat_contingency_table(col1, col2)` | 分割表 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_contingency_table) |
+| `stat_cohens_d2(grp1, grp2)` | Cohen's d（2標本） | REAL | [詳細](ref/complex_aggregates-ja.md#stat_cohens_d2) |
+| `stat_hedges_g2(grp1, grp2)` | Hedges' g（2標本） | REAL | [詳細](ref/complex_aggregates-ja.md#stat_hedges_g2) |
+| `stat_glass_delta(ctrl, trt)` | Glass's Delta | REAL | [詳細](ref/complex_aggregates-ja.md#stat_glass_delta) |
+| `stat_ci_mean_diff(grp1, grp2)` | 2標本平均差の信頼区間 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_ci_mean_diff) |
+| `stat_ci_mean_diff_welch(grp1, grp2)` | Welch 法の信頼区間 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_ci_mean_diff_welch) |
+| `stat_kaplan_meier(time, event)` | Kaplan-Meier 生存曲線 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_kaplan_meier) |
+| `stat_nelson_aalen(time, event)` | Nelson-Aalen 累積ハザード | JSON | [詳細](ref/complex_aggregates-ja.md#stat_nelson_aalen) |
+| `stat_logrank(time, event, grp)` | Log-rank 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_logrank) |
+| `stat_bootstrap(col, n)` | 汎用ブートストラップ | JSON | [詳細](ref/complex_aggregates-ja.md#stat_bootstrap) |
+| `stat_bootstrap_bca(col, n)` | BCa ブートストラップ | JSON | [詳細](ref/complex_aggregates-ja.md#stat_bootstrap_bca) |
+| `stat_bootstrap_sample(col)` | ブートストラップサンプル | JSON | [詳細](ref/complex_aggregates-ja.md#stat_bootstrap_sample) |
+| `stat_permutation_test2(grp1, grp2)` | 2標本置換検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_permutation_test2) |
+| `stat_permutation_paired(x, y)` | 対応のある置換検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_permutation_paired) |
+| `stat_permutation_corr(x, y)` | 相関の置換検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_permutation_corr) |
+| `stat_acf(col, max_lag)` | 自己相関関数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_acf) |
+| `stat_pacf(col, max_lag)` | 偏自己相関関数 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_pacf) |
+| `stat_sample_replace(col, n)` | 復元抽出 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_sample_replace) |
+| `stat_sample(col, n)` | 非復元抽出 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_sample) |
+
+### スカラー関数 — 検定補助（40関数）
+
+| 関数名 | 説明 | 戻り値 | 詳細 |
+|---|---|---|---|
+| `stat_normal_pdf(x [,mu, sigma])` | 正規分布 PDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#正規分布) |
+| `stat_normal_cdf(x [,mu, sigma])` | 正規分布 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#正規分布) |
+| `stat_normal_quantile(p [,mu, sigma])` | 正規分布分位点 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#正規分布) |
+| `stat_normal_rand([mu, sigma])` | 正規分布乱数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#正規分布) |
+| `stat_chisq_pdf(x, df)` | カイ二乗分布 PDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カイ二乗分布) |
+| `stat_chisq_cdf(x, df)` | カイ二乗分布 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カイ二乗分布) |
+| `stat_chisq_quantile(p, df)` | カイ二乗分布分位点 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カイ二乗分布) |
+| `stat_chisq_rand(df)` | カイ二乗分布乱数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カイ二乗分布) |
+| `stat_t_pdf(x, df)` | t 分布 PDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#t-分布) |
+| `stat_t_cdf(x, df)` | t 分布 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#t-分布) |
+| `stat_t_quantile(p, df)` | t 分布分位点 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#t-分布) |
+| `stat_t_rand(df)` | t 分布乱数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#t-分布) |
+| `stat_f_pdf(x, df1, df2)` | F 分布 PDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#f-分布) |
+| `stat_f_cdf(x, df1, df2)` | F 分布 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#f-分布) |
+| `stat_f_quantile(p, df1, df2)` | F 分布分位点 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#f-分布) |
+| `stat_f_rand(df1, df2)` | F 分布乱数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#f-分布) |
+| `stat_betainc(a, b, x)` | 正則化不完全ベータ関数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_betaincinv(a, b, p)` | 不完全ベータ逆関数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_norm_cdf(x)` | 標準正規分布 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_norm_quantile(p)` | 標準正規分布逆 CDF | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_gammainc_lower(a, x)` | 下側不完全ガンマ関数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_gammainc_upper(a, x)` | 上側不完全ガンマ関数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_gammainc_lower_inv(a, p)` | 不完全ガンマ逆関数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#特殊関数) |
+| `stat_z_test_prop(x, n, p0)` | 1標本比率 z 検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_z_test_prop) |
+| `stat_z_test_prop2(x1, n1, x2, n2)` | 2標本比率 z 検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_z_test_prop2) |
+| `stat_bonferroni(p, m)` | Bonferroni 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
+| `stat_bh_correction(p, rank, total)` | BH 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
+| `stat_holm_correction(p, rank, total)` | Holm 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
+| `stat_fisher_exact(a, b, c, d)` | Fisher 正確確率検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_fisher_exact) |
+| `stat_odds_ratio(a, b, c, d)` | オッズ比 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
+| `stat_relative_risk(a, b, c, d)` | 相対リスク | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
+| `stat_risk_difference(a, b, c, d)` | リスク差 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
+| `stat_nnt(a, b, c, d)` | 治療必要数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
+| `stat_ci_prop(x, n [,conf])` | 比率の信頼区間（Wald） | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
+| `stat_ci_prop_wilson(x, n [,conf])` | 比率の信頼区間（Wilson） | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
+| `stat_ci_prop_diff(x1, n1, x2, n2 [,conf])` | 比率差の信頼区間 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
+| `stat_aic(ll, k)` | AIC | REAL | [詳細](ref/scalar_tests_helpers-ja.md#モデル選択) |
+| `stat_aicc(ll, n, k)` | AICc | REAL | [詳細](ref/scalar_tests_helpers-ja.md#モデル選択) |
+| `stat_bic(ll, n, k)` | BIC | REAL | [詳細](ref/scalar_tests_helpers-ja.md#モデル選択) |
+| `stat_boxcox(x, lambda)` | Box-Cox 変換 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#stat_boxcox) |
+
+### スカラー関数 — 分布・変換（83関数）
+
+| 関数名 | 説明 | 戻り値 | 詳細 |
+|---|---|---|---|
+| `stat_uniform_pdf/cdf/quantile/rand` | 一様分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#一様分布) |
+| `stat_exponential_pdf/cdf/quantile/rand` | 指数分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#指数分布) |
+| `stat_gamma_pdf/cdf/quantile/rand` | ガンマ分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#ガンマ分布) |
+| `stat_beta_pdf/cdf/quantile/rand` | ベータ分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#ベータ分布) |
+| `stat_lognormal_pdf/cdf/quantile/rand` | 対数正規分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#対数正規分布) |
+| `stat_weibull_pdf/cdf/quantile/rand` | ワイブル分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#ワイブル分布) |
+| `stat_binomial_pmf/cdf/quantile/rand` | 二項分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#二項分布) |
+| `stat_poisson_pmf/cdf/quantile/rand` | ポアソン分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#ポアソン分布) |
+| `stat_geometric_pmf/cdf/quantile/rand` | 幾何分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#幾何分布) |
+| `stat_nbinom_pmf/cdf/quantile/rand` | 負の二項分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#負の二項分布) |
+| `stat_hypergeom_pmf/cdf/quantile/rand` | 超幾何分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#超幾何分布) |
+| `stat_bernoulli_pmf/cdf/quantile/rand` | ベルヌーイ分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#ベルヌーイ分布) |
+| `stat_duniform_pmf/cdf/quantile/rand` | 離散一様分布（4関数） | REAL | [詳細](ref/scalar_distributions-ja.md#離散一様分布) |
+| `stat_binomial_coef(n, k)` | 二項係数 | INTEGER | [詳細](ref/scalar_distributions-ja.md#組合せ論) |
+| `stat_log_binomial_coef(n, k)` | 対数二項係数 | REAL | [詳細](ref/scalar_distributions-ja.md#組合せ論) |
+| `stat_log_factorial(n)` | 対数階乗 | REAL | [詳細](ref/scalar_distributions-ja.md#組合せ論) |
+| `stat_lgamma(x)` | 対数ガンマ関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_tgamma(x)` | ガンマ関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_beta_func(a, b)` | ベータ関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_lbeta(a, b)` | 対数ベータ関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_erf(x)` | 誤差関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_erfc(x)` | 相補誤差関数 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_logarithmic_mean(a, b)` | 対数平均 | REAL | [詳細](ref/scalar_distributions-ja.md#特殊関数) |
+| `stat_hedges_j(n)` | Hedges 補正係数 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_t_to_r(t, df)` | t → r 変換 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_d_to_r(d)` | d → r 変換 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_r_to_d(r)` | r → d 変換 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_eta_squared_ef(ss_eff, ss_total)` | イータ二乗 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_partial_eta_sq(F, df1, df2)` | 偏イータ二乗 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_omega_squared_ef(ss_eff, ss_tot, ms_err, df_eff)` | オメガ二乗 | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_cohens_h(p1, p2)` | Cohen's h | REAL | [詳細](ref/scalar_distributions-ja.md#効果量変換解釈) |
+| `stat_interpret_d(d)` | Cohen's d 解釈 | TEXT | [詳細](ref/scalar_distributions-ja.md#効果量の解釈) |
+| `stat_interpret_r(r)` | 相関係数解釈 | TEXT | [詳細](ref/scalar_distributions-ja.md#効果量の解釈) |
+| `stat_interpret_eta2(eta2)` | イータ二乗解釈 | TEXT | [詳細](ref/scalar_distributions-ja.md#効果量の解釈) |
+| `stat_power_t1(d, n, alpha)` | 1標本検出力 | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_n_t1(d, power, alpha)` | 1標本必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_power_t2(d, n1, n2, alpha)` | 2標本検出力 | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_n_t2(d, power, alpha)` | 2標本必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_power_prop(p1, p2, n, alpha)` | 比率検出力 | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_n_prop(p1, p2, power, alpha)` | 比率必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
+| `stat_moe_prop(x, n [,conf])` | 比率の誤差マージン | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
+| `stat_moe_prop_worst(n [,conf])` | 最悪ケース誤差マージン | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
+| `stat_n_moe_prop(moe [,conf [,p]])` | 比率推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
+| `stat_n_moe_mean(moe, sigma [,conf])` | 平均推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
+
+---
+
+## 実践的な使用例
+
+### 記述統計の一括取得
+
+```sql
+SELECT
+    COUNT(val)                       AS n,
+    stat_mean(val)                   AS mean,
+    stat_median(val)                 AS median,
+    stat_mode(val)                   AS mode,
+    stat_sample_stddev(val)          AS stddev,
+    stat_sample_variance(val)        AS variance,
+    MIN(val)                         AS min,
+    MAX(val)                         AS max,
+    stat_range(val)                  AS range,
+    stat_iqr(val)                    AS iqr,
+    stat_se(val)                     AS se,
+    stat_skewness(val)               AS skewness,
+    stat_kurtosis(val)               AS kurtosis
+FROM measurements;
+```
+
+### ロバスト統計と古典的統計の比較
+
+```sql
+-- 外れ値の影響を評価する
+SELECT
+    '古典的' AS type,
+    stat_mean(val)            AS location,
+    stat_sample_stddev(val)   AS spread
+FROM data
+UNION ALL
+SELECT
+    'ロバスト' AS type,
+    stat_hodges_lehmann(val)  AS location,
+    stat_mad_scaled(val)      AS spread
+FROM data;
+```
+
+### グループ別の詳細分析
+
+```sql
+SELECT
+    category,
+    COUNT(score) AS n,
+    stat_mean(score)              AS mean,
+    stat_median(score)            AS median,
+    stat_sample_stddev(score)     AS stddev,
+    stat_cv(score)                AS cv,
+    stat_iqr(score)               AS iqr,
+    stat_skewness(score)          AS skewness,
+    stat_kurtosis(score)          AS kurtosis,
+    stat_mad_scaled(score)        AS robust_spread,
+    stat_hodges_lehmann(score)    AS robust_location
+FROM exam_results
+GROUP BY category
+ORDER BY mean DESC;
+```
+
+### 正規性の簡易判定
+
+```sql
+-- 複数のカラムの正規性を一度にチェック
+SELECT
+    'height' AS variable,
+    stat_skewness(height) AS skewness,
+    stat_kurtosis(height) AS kurtosis,
+    CASE
+        WHEN ABS(stat_skewness(height)) < 2 AND ABS(stat_kurtosis(height)) < 7
+        THEN 'approximately normal'
+        ELSE 'non-normal'
+    END AS normality
+FROM people
+UNION ALL
+SELECT
+    'weight',
+    stat_skewness(weight),
+    stat_kurtosis(weight),
+    CASE
+        WHEN ABS(stat_skewness(weight)) < 2 AND ABS(stat_kurtosis(weight)) < 7
+        THEN 'approximately normal'
+        ELSE 'non-normal'
+    END
+FROM people;
+```
+
+### 回帰分析と予測精度の評価
+
+```sql
+-- 回帰分析の実行と精度評価を一度に
+SELECT
+    stat_simple_regression(x, y) AS regression,
+    stat_pearson_r(x, y) AS correlation,
+    stat_r_squared(x, y) AS r_squared,
+    stat_mae(x, y) AS mae,
+    stat_rmse(x, y) AS rmse
+FROM experiment_data;
+```
+
+### 時系列分析パイプライン
+
+```sql
+-- 株価データの包括的な時系列分析
+SELECT date, close_price,
+       stat_moving_avg(close_price, 20) AS sma_20,
+       stat_ema(close_price, 12) AS ema_12,
+       stat_rolling_std(close_price, 20) AS volatility,
+       stat_diff(close_price, 1) AS daily_change,
+       stat_lag(close_price, 1) AS prev_close
+FROM stock_prices;
+```
+
+### 欠損値処理と外れ値除去
+
+```sql
+-- 欠損値の補完 → 外れ値検出 → クリーンなデータで分析
+SELECT id, raw_value,
+       stat_fillna_interp(raw_value) AS filled,
+       stat_outliers_iqr(raw_value) AS is_outlier,
+       stat_winsorize(raw_value, 5) AS winsorized
+FROM sensor_data;
+```

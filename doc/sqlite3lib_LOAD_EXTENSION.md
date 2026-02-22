@@ -1,419 +1,421 @@
+[日本語](sqlite3lib_LOAD_EXTENSION-ja.md)
+
 # SQLite3 Loadable Extension Guide
 
-SQLite3のランタイム拡張 (Loadable Extension) の実装ガイド。
-本プロジェクトでは C++ (`ext_funcs.cpp`) で拡張ライブラリを実装している。
+An implementation guide for SQLite3 runtime extensions (Loadable Extensions).
+This project implements the extension library in C++ (`ext_funcs.cpp`).
 
 ---
 
-## 目次
+## Table of Contents
 
-1. [Loadable Extension とは](#1-loadable-extension-とは)
-2. [プロジェクト構成](#2-プロジェクト構成)
-3. [ビルドと実行](#3-ビルドと実行)
-4. [Loadable Extension の仕組み](#4-loadable-extension-の仕組み)
-5. [拡張関数の実装パターン](#5-拡張関数の実装パターン)
-6. [SQLite C API リファレンス](#6-sqlite-c-api-リファレンス)
-7. [C++版の実装テクニック](#7-c版の実装テクニック)
-8. [ダイナミックライブラリとしての考慮事項](#8-ダイナミックライブラリとしての考慮事項)
+1. [What is a Loadable Extension](#1-what-is-a-loadable-extension)
+2. [Project Structure](#2-project-structure)
+3. [Build and Run](#3-build-and-run)
+4. [How Loadable Extensions Work](#4-how-loadable-extensions-work)
+5. [Extension Function Implementation Patterns](#5-extension-function-implementation-patterns)
+6. [SQLite C API Reference](#6-sqlite-c-api-reference)
+7. [C++ Implementation Techniques](#7-c-implementation-techniques)
+8. [Dynamic Library Considerations](#8-dynamic-library-considerations)
 
 ---
 
-## 1. Loadable Extension とは
+## 1. What is a Loadable Extension
 
-### 概要
+### Overview
 
-SQLite3 Loadable Extension は、SQLite にカスタム機能を**ランタイムで動的に追加**する仕組みである。
-C++ で記述したダイナミックライブラリ (`.dylib` / `.so` / `.dll`) を
-`sqlite3_load_extension()` で読み込むことで、SQLite 本体を再コンパイルすることなく機能を拡張できる。
+An SQLite3 Loadable Extension is a mechanism for **dynamically adding custom functionality at runtime** to SQLite.
+By loading a dynamic library (`.dylib` / `.so` / `.dll`) written in C++ via
+`sqlite3_load_extension()`, you can extend SQLite's functionality without recompiling the SQLite core.
 
-### できること
+### Capabilities
 
-| 機能 | 説明 | 例 |
+| Feature | Description | Example |
 |---|---|---|
-| **スカラー関数** | 入力値に対して1つの値を返す関数 | `square(x)`, `upper(s)` |
-| **集約関数** | 複数行を集計して1つの値を返す関数 | `my_sum(x)`, `sha256_agg(s)` |
-| **ウィンドウ関数** | OVER句と組み合わせる集約関数 (SQLite 3.25+) | カスタム移動平均 |
-| **照合順序 (Collation)** | 文字列の比較ルールを定義する | 日本語ソート順 |
-| **仮想テーブル (Virtual Table)** | 外部データソースをテーブルとして公開する | CSV, JSON, REST API |
-| **VFS (Virtual File System)** | ファイルI/O層をカスタマイズする | 暗号化, メモリFS |
-| **既存関数の上書き** | 組み込み関数を独自実装で置き換える | `upper()` の多言語対応化 |
-| **複数関数の一括登録** | 1つの拡張から複数の関数をまとめて登録 | 本プロジェクトの実装 |
+| **Scalar functions** | Functions that return a single value for given input values | `square(x)`, `upper(s)` |
+| **Aggregate functions** | Functions that aggregate multiple rows and return a single value | `my_sum(x)`, `sha256_agg(s)` |
+| **Window functions** | Aggregate functions used with OVER clauses (SQLite 3.25+) | Custom moving average |
+| **Collations** | Define string comparison rules | Japanese sort order |
+| **Virtual Tables** | Expose external data sources as tables | CSV, JSON, REST API |
+| **VFS (Virtual File System)** | Customize the file I/O layer | Encryption, memory FS |
+| **Overriding existing functions** | Replace built-in functions with custom implementations | Multilingual `upper()` |
+| **Batch registration of multiple functions** | Register multiple functions from a single extension | This project's implementation |
 
-### できないこと
+### Limitations
 
-| 制約 | 説明 |
+| Constraint | Description |
 |---|---|
-| **SQL 構文の変更** | 新しい SQL キーワードや構文を追加することはできない |
-| **ストレージエンジンの変更** | SQLite の内部的な B-Tree 構造やページフォーマットは変更できない |
-| **トリガーやビューの自動作成** | DDL を暗黙的に実行する仕組みはない (明示的な `sqlite3_exec` は可能) |
-| **マルチスレッドの保証** | SQLite のスレッドモードに依存する。拡張側で独自にスレッドを作成すべきではない |
-| **永続的な自動ロード** | DB ファイルに拡張情報は保存されない。接続のたびにロードが必要 |
-| **サンドボックス実行** | 拡張はホストプロセスと同じ権限で動作する。任意のシステムコールを実行可能 |
-| **他言語からの直接記述** | C/C++ の関数ポインタインターフェイスが必須。他言語は FFI 経由になる |
+| **Cannot modify SQL syntax** | New SQL keywords or syntax cannot be added |
+| **Cannot modify storage engine** | SQLite's internal B-Tree structure and page format cannot be changed |
+| **Cannot auto-create triggers or views** | There is no mechanism for implicitly executing DDL (explicit `sqlite3_exec` is possible) |
+| **No multi-threading guarantees** | Depends on SQLite's threading mode. Extensions should not create their own threads |
+| **No persistent auto-loading** | Extension information is not stored in the DB file. Loading is required for each connection |
+| **No sandboxed execution** | Extensions run with the same privileges as the host process. Arbitrary system calls can be made |
+| **Cannot write directly in other languages** | The C/C++ function pointer interface is required. Other languages must go through FFI |
 
-### セキュリティに関する注意
+### Security Notes
 
-- 拡張はホストプロセスと**同一のアドレス空間**で実行されるため、バグや悪意あるコードはプロセス全体に影響する
-- `sqlite3_enable_load_extension(db, 1)` を呼ばない限り、拡張ロードは**デフォルトで無効**
-- SQL 文中の `load_extension()` 関数はさらに制限が厳しく、`sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL)` で別途有効化が必要
-- 信頼できない拡張をロードしてはならない
+- Extensions execute in the **same address space** as the host process, so bugs or malicious code can affect the entire process
+- Extension loading is **disabled by default** unless `sqlite3_enable_load_extension(db, 1)` is called
+- The `load_extension()` SQL function has even stricter restrictions and requires separate enablement via `sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL)`
+- Untrusted extensions must never be loaded
 
 ---
 
-## 2. プロジェクト構成
+## 2. Project Structure
 
 ```text
 sqlite3StatisticalLibrary/
-├── CMakeLists.txt          # ビルド設定
+├── CMakeLists.txt          # Build configuration
 ├── README.md
 ├── cmake/
-│   ├── sqlite3.cmake       # SQLite3 のダウンロード設定
-│   └── statcpp.cmake       # statcpp のダウンロード設定
-├── doc/                    # ドキュメント
-├── download/               # ダウンロードされた依存ライブラリ
-│   ├── sqlite3/            # SQLite3 ソース
-│   └── statcpp/            # statcpp ヘッダーオンリーライブラリ
+│   ├── sqlite3.cmake       # SQLite3 download configuration
+│   └── statcpp.cmake       # statcpp download configuration
+├── doc/                    # Documentation
+├── download/               # Downloaded dependency libraries
+│   ├── sqlite3/            # SQLite3 source
+│   └── statcpp/            # statcpp header-only library
 └── src/
-    ├── main.cpp             # 拡張をロードしてテストする C++ プログラム
-    ├── ext_funcs.cpp        # 拡張ライブラリ (C++) — 統計関数の実装
-    └── include/             # （現在空）
+    ├── main.cpp             # C++ program that loads and tests the extension
+    ├── ext_funcs.cpp        # Extension library (C++) — statistical function implementations
+    └── include/             # (currently empty)
 ```
 
-### 外部ライブラリ
+### External Libraries
 
 #### statcpp
 
-- **概要**: C++ ヘッダーオンリーの統計計算ライブラリ
-- **配置先**: `download/statcpp/statcpp-install/include/statcpp/`
-- **利用方法**: CMake の `statcpp.cmake` により自動ダウンロード・配置される
+- **Overview**: A C++ header-only statistical computation library
+- **Location**: `download/statcpp/statcpp-install/include/statcpp/`
+- **Usage**: Automatically downloaded and placed by CMake's `statcpp.cmake`
 
-本プロジェクトでは `ext_funcs.cpp` で `#include <statcpp/statcpp.hpp>` としてインクルードし、
-統計計算のロジック部分を statcpp に委譲している。
+In this project, `ext_funcs.cpp` includes it with `#include <statcpp/statcpp.hpp>`,
+delegating the statistical computation logic to statcpp.
 
-### 提供する SQL 関数
+### Provided SQL Functions
 
-#### 基本集約関数（24関数）
+#### Basic Aggregate Functions (24 functions)
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_mean(col)` | 数値 1 | 数値 | 算術平均 |
-| `stat_median(col)` | 数値 1 | 数値 | 中央値 |
-| `stat_mode(col)` | 数値 1 | 数値 | 最頻値（複数ある場合は最小値） |
-| `stat_geometric_mean(col)` | 数値 1 | 数値 | 幾何平均 |
-| `stat_harmonic_mean(col)` | 数値 1 | 数値 | 調和平均 |
-| `stat_range(col)` | 数値 1 | 数値 | 範囲（最大値 − 最小値） |
-| `stat_var(col)` | 数値 1 | 数値 | 分散（母分散, ddof=0） |
-| `stat_population_variance(col)` | 数値 1 | 数値 | 母分散 |
-| `stat_sample_variance(col)` | 数値 1 | 数値 | 標本分散（不偏分散） |
-| `stat_stdev(col)` | 数値 1 | 数値 | 標準偏差（母, ddof=0） |
-| `stat_population_stddev(col)` | 数値 1 | 数値 | 母標準偏差 |
-| `stat_sample_stddev(col)` | 数値 1 | 数値 | 標本標準偏差 |
-| `stat_cv(col)` | 数値 1 | 数値 | 変動係数 |
-| `stat_iqr(col)` | 数値 1 | 数値 | 四分位範囲 |
-| `stat_mad_mean(col)` | 数値 1 | 数値 | 平均偏差 |
-| `stat_geometric_stddev(col)` | 数値 1 | 数値 | 幾何標準偏差 |
-| `stat_population_skewness(col)` | 数値 1 | 数値 | 母歪度 |
-| `stat_skewness(col)` | 数値 1 | 数値 | 標本歪度 |
-| `stat_population_kurtosis(col)` | 数値 1 | 数値 | 母尖度（超過尖度） |
-| `stat_kurtosis(col)` | 数値 1 | 数値 | 標本尖度（超過尖度） |
-| `stat_se(col)` | 数値 1 | 数値 | 標準誤差 |
-| `stat_mad(col)` | 数値 1 | 数値 | 中央絶対偏差 (MAD) |
-| `stat_mad_scaled(col)` | 数値 1 | 数値 | スケーリングされた MAD |
-| `stat_hodges_lehmann(col)` | 数値 1 | 数値 | Hodges-Lehmann 推定量 |
+| `stat_mean(col)` | numeric x1 | numeric | Arithmetic mean |
+| `stat_median(col)` | numeric x1 | numeric | Median |
+| `stat_mode(col)` | numeric x1 | numeric | Mode (smallest value if multiple exist) |
+| `stat_geometric_mean(col)` | numeric x1 | numeric | Geometric mean |
+| `stat_harmonic_mean(col)` | numeric x1 | numeric | Harmonic mean |
+| `stat_range(col)` | numeric x1 | numeric | Range (max - min) |
+| `stat_var(col)` | numeric x1 | numeric | Variance (population variance, ddof=0) |
+| `stat_population_variance(col)` | numeric x1 | numeric | Population variance |
+| `stat_sample_variance(col)` | numeric x1 | numeric | Sample variance (unbiased variance) |
+| `stat_stdev(col)` | numeric x1 | numeric | Standard deviation (population, ddof=0) |
+| `stat_population_stddev(col)` | numeric x1 | numeric | Population standard deviation |
+| `stat_sample_stddev(col)` | numeric x1 | numeric | Sample standard deviation |
+| `stat_cv(col)` | numeric x1 | numeric | Coefficient of variation |
+| `stat_iqr(col)` | numeric x1 | numeric | Interquartile range |
+| `stat_mad_mean(col)` | numeric x1 | numeric | Mean absolute deviation |
+| `stat_geometric_stddev(col)` | numeric x1 | numeric | Geometric standard deviation |
+| `stat_population_skewness(col)` | numeric x1 | numeric | Population skewness |
+| `stat_skewness(col)` | numeric x1 | numeric | Sample skewness |
+| `stat_population_kurtosis(col)` | numeric x1 | numeric | Population kurtosis (excess kurtosis) |
+| `stat_kurtosis(col)` | numeric x1 | numeric | Sample kurtosis (excess kurtosis) |
+| `stat_se(col)` | numeric x1 | numeric | Standard error |
+| `stat_mad(col)` | numeric x1 | numeric | Median absolute deviation (MAD) |
+| `stat_mad_scaled(col)` | numeric x1 | numeric | Scaled MAD |
+| `stat_hodges_lehmann(col)` | numeric x1 | numeric | Hodges-Lehmann estimator |
 
-#### パラメータ付き集約関数（20関数）
+#### Aggregate Functions with Parameters (20 functions)
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_trimmed_mean(col, proportion)` | 数値, 数値 | 数値 | トリム平均 |
-| `stat_quartile(col)` | 数値 1 | JSON | 四分位数 (Q1,Q2,Q3) |
-| `stat_percentile(col, p)` | 数値, 数値 | 数値 | パーセンタイル |
-| `stat_z_test(col, mu0, sigma)` | 数値, 数値, 数値 | JSON | 1標本 z 検定 |
-| `stat_t_test(col, mu0)` | 数値, 数値 | JSON | 1標本 t 検定 |
-| `stat_chisq_gof_uniform(col)` | 数値 1 | JSON | カイ二乗適合度検定（均等） |
-| `stat_shapiro_wilk(col)` | 数値 1 | JSON | Shapiro-Wilk 検定 |
-| `stat_ks_test(col)` | 数値 1 | JSON | KS 検定（正規性） |
-| `stat_wilcoxon(col, mu0)` | 数値, 数値 | JSON | Wilcoxon 符号付順位検定 |
-| `stat_ci_mean(col, confidence)` | 数値, 数値 | JSON | 平均の信頼区間（t 分布） |
-| `stat_ci_mean_z(col, sigma, confidence)` | 数値, 数値, 数値 | JSON | 平均の信頼区間（z 分布） |
-| `stat_ci_var(col, confidence)` | 数値, 数値 | JSON | 分散の信頼区間 |
-| `stat_moe_mean(col, confidence)` | 数値, 数値 | 数値 | 平均の誤差マージン |
-| `stat_cohens_d(col, mu0)` | 数値, 数値 | 数値 | Cohen's d（1標本） |
-| `stat_hedges_g(col, mu0)` | 数値, 数値 | 数値 | Hedges' g（1標本） |
-| `stat_acf_lag(col, lag)` | 数値, 数値 | 数値 | 自己相関係数 |
-| `stat_biweight_midvar(col, c)` | 数値, 数値 | 数値 | Biweight Midvariance |
-| `stat_bootstrap_mean(col, n)` | 数値, 数値 | JSON | 平均のブートストラップ |
-| `stat_bootstrap_median(col, n)` | 数値, 数値 | JSON | 中央値のブートストラップ |
-| `stat_bootstrap_stddev(col, n)` | 数値, 数値 | JSON | 標準偏差のブートストラップ |
+| `stat_trimmed_mean(col, proportion)` | numeric, numeric | numeric | Trimmed mean |
+| `stat_quartile(col)` | numeric x1 | JSON | Quartiles (Q1, Q2, Q3) |
+| `stat_percentile(col, p)` | numeric, numeric | numeric | Percentile |
+| `stat_z_test(col, mu0, sigma)` | numeric, numeric, numeric | JSON | One-sample z-test |
+| `stat_t_test(col, mu0)` | numeric, numeric | JSON | One-sample t-test |
+| `stat_chisq_gof_uniform(col)` | numeric x1 | JSON | Chi-squared goodness-of-fit test (uniform) |
+| `stat_shapiro_wilk(col)` | numeric x1 | JSON | Shapiro-Wilk test |
+| `stat_ks_test(col)` | numeric x1 | JSON | KS test (normality) |
+| `stat_wilcoxon(col, mu0)` | numeric, numeric | JSON | Wilcoxon signed-rank test |
+| `stat_ci_mean(col, confidence)` | numeric, numeric | JSON | Confidence interval for the mean (t-distribution) |
+| `stat_ci_mean_z(col, sigma, confidence)` | numeric, numeric, numeric | JSON | Confidence interval for the mean (z-distribution) |
+| `stat_ci_var(col, confidence)` | numeric, numeric | JSON | Confidence interval for variance |
+| `stat_moe_mean(col, confidence)` | numeric, numeric | numeric | Margin of error for the mean |
+| `stat_cohens_d(col, mu0)` | numeric, numeric | numeric | Cohen's d (one-sample) |
+| `stat_hedges_g(col, mu0)` | numeric, numeric | numeric | Hedges' g (one-sample) |
+| `stat_acf_lag(col, lag)` | numeric, numeric | numeric | Autocorrelation coefficient |
+| `stat_biweight_midvar(col, c)` | numeric, numeric | numeric | Biweight Midvariance |
+| `stat_bootstrap_mean(col, n)` | numeric, numeric | JSON | Bootstrap for the mean |
+| `stat_bootstrap_median(col, n)` | numeric, numeric | JSON | Bootstrap for the median |
+| `stat_bootstrap_stddev(col, n)` | numeric, numeric | JSON | Bootstrap for the standard deviation |
 
-#### 2カラム集約関数（27関数）
+#### Two-Column Aggregate Functions (27 functions)
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_population_covariance(x, y)` | 数値, 数値 | 数値 | 母共分散 |
-| `stat_covariance(x, y)` | 数値, 数値 | 数値 | 標本共分散 |
-| `stat_pearson_r(x, y)` | 数値, 数値 | 数値 | ピアソン相関係数 |
-| `stat_spearman_r(x, y)` | 数値, 数値 | 数値 | スピアマン順位相関 |
-| `stat_kendall_tau(x, y)` | 数値, 数値 | 数値 | ケンドール順位相関 |
-| `stat_weighted_covariance(val, wt)` | 数値, 数値 | 数値 | 重み付き共分散 |
-| `stat_weighted_mean(val, wt)` | 数値, 数値 | 数値 | 重み付き平均 |
-| `stat_weighted_harmonic_mean(val, wt)` | 数値, 数値 | 数値 | 重み付き調和平均 |
-| `stat_weighted_variance(val, wt)` | 数値, 数値 | 数値 | 重み付き分散 |
-| `stat_weighted_stddev(val, wt)` | 数値, 数値 | 数値 | 重み付き標準偏差 |
-| `stat_weighted_median(val, wt)` | 数値, 数値 | 数値 | 重み付き中央値 |
-| `stat_weighted_percentile(val, wt, p)` | 数値, 数値, 数値 | 数値 | 重み付きパーセンタイル |
-| `stat_simple_regression(x, y)` | 数値, 数値 | JSON | 単回帰分析 |
-| `stat_r_squared(actual, pred)` | 数値, 数値 | 数値 | 決定係数 R² |
-| `stat_adjusted_r_squared(actual, pred)` | 数値, 数値 | 数値 | 自由度調整済み R² |
-| `stat_t_test_paired(x, y)` | 数値, 数値 | JSON | 対応のある t 検定 |
-| `stat_chisq_gof(obs, exp)` | 数値, 数値 | JSON | カイ二乗適合度検定 |
-| `stat_mae(actual, pred)` | 数値, 数値 | 数値 | 平均絶対誤差 |
-| `stat_mse(actual, pred)` | 数値, 数値 | 数値 | 平均二乗誤差 |
-| `stat_rmse(actual, pred)` | 数値, 数値 | 数値 | RMSE |
-| `stat_mape(actual, pred)` | 数値, 数値 | 数値 | 平均絶対パーセント誤差 |
-| `stat_euclidean_dist(a, b)` | 数値, 数値 | 数値 | ユークリッド距離 |
-| `stat_manhattan_dist(a, b)` | 数値, 数値 | 数値 | マンハッタン距離 |
-| `stat_cosine_sim(a, b)` | 数値, 数値 | 数値 | コサイン類似度 |
-| `stat_cosine_dist(a, b)` | 数値, 数値 | 数値 | コサイン距離 |
-| `stat_minkowski_dist(a, b, p)` | 数値, 数値, 数値 | 数値 | ミンコフスキー距離 |
-| `stat_chebyshev_dist(a, b)` | 数値, 数値 | 数値 | チェビシェフ距離 |
+| `stat_population_covariance(x, y)` | numeric, numeric | numeric | Population covariance |
+| `stat_covariance(x, y)` | numeric, numeric | numeric | Sample covariance |
+| `stat_pearson_r(x, y)` | numeric, numeric | numeric | Pearson correlation coefficient |
+| `stat_spearman_r(x, y)` | numeric, numeric | numeric | Spearman rank correlation |
+| `stat_kendall_tau(x, y)` | numeric, numeric | numeric | Kendall rank correlation |
+| `stat_weighted_covariance(val, wt)` | numeric, numeric | numeric | Weighted covariance |
+| `stat_weighted_mean(val, wt)` | numeric, numeric | numeric | Weighted mean |
+| `stat_weighted_harmonic_mean(val, wt)` | numeric, numeric | numeric | Weighted harmonic mean |
+| `stat_weighted_variance(val, wt)` | numeric, numeric | numeric | Weighted variance |
+| `stat_weighted_stddev(val, wt)` | numeric, numeric | numeric | Weighted standard deviation |
+| `stat_weighted_median(val, wt)` | numeric, numeric | numeric | Weighted median |
+| `stat_weighted_percentile(val, wt, p)` | numeric, numeric, numeric | numeric | Weighted percentile |
+| `stat_simple_regression(x, y)` | numeric, numeric | JSON | Simple linear regression |
+| `stat_r_squared(actual, pred)` | numeric, numeric | numeric | Coefficient of determination R-squared |
+| `stat_adjusted_r_squared(actual, pred)` | numeric, numeric | numeric | Adjusted R-squared |
+| `stat_t_test_paired(x, y)` | numeric, numeric | JSON | Paired t-test |
+| `stat_chisq_gof(obs, exp)` | numeric, numeric | JSON | Chi-squared goodness-of-fit test |
+| `stat_mae(actual, pred)` | numeric, numeric | numeric | Mean absolute error |
+| `stat_mse(actual, pred)` | numeric, numeric | numeric | Mean squared error |
+| `stat_rmse(actual, pred)` | numeric, numeric | numeric | RMSE |
+| `stat_mape(actual, pred)` | numeric, numeric | numeric | Mean absolute percentage error |
+| `stat_euclidean_dist(a, b)` | numeric, numeric | numeric | Euclidean distance |
+| `stat_manhattan_dist(a, b)` | numeric, numeric | numeric | Manhattan distance |
+| `stat_cosine_sim(a, b)` | numeric, numeric | numeric | Cosine similarity |
+| `stat_cosine_dist(a, b)` | numeric, numeric | numeric | Cosine distance |
+| `stat_minkowski_dist(a, b, p)` | numeric, numeric, numeric | numeric | Minkowski distance |
+| `stat_chebyshev_dist(a, b)` | numeric, numeric | numeric | Chebyshev distance |
 
-#### ウィンドウ関数（23関数）
+#### Window Functions (23 functions)
 
-ウィンドウ関数は全行スキャン型で実装されている。各行に対して1つの値を返す。`OVER()` 句なしでも使用可能。
+Window functions are implemented using a full-scan approach. Each row returns a single value. Can also be used without an `OVER()` clause.
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_rolling_mean(col, window)` | 数値, 整数 | 数値/行 | ローリング平均 |
-| `stat_rolling_std(col, window)` | 数値, 整数 | 数値/行 | ローリング標準偏差 |
-| `stat_rolling_min(col, window)` | 数値, 整数 | 数値/行 | ローリング最小値 |
-| `stat_rolling_max(col, window)` | 数値, 整数 | 数値/行 | ローリング最大値 |
-| `stat_rolling_sum(col, window)` | 数値, 整数 | 数値/行 | ローリング合計 |
-| `stat_moving_avg(col, window)` | 数値, 整数 | 数値/行 | 単純移動平均 |
-| `stat_ema(col, span)` | 数値, 整数 | 数値/行 | 指数移動平均（α=2/(span+1)） |
-| `stat_rank(col)` | 数値 1 | 数値/行 | 順位変換 |
-| `stat_fillna_mean(col)` | 数値 1 | 数値/行 | 平均値補完 |
-| `stat_fillna_median(col)` | 数値 1 | 数値/行 | 中央値補完 |
-| `stat_fillna_ffill(col)` | 数値 1 | 数値/行 | 前方補完 |
-| `stat_fillna_bfill(col)` | 数値 1 | 数値/行 | 後方補完 |
-| `stat_fillna_interp(col)` | 数値 1 | 数値/行 | 線形補間 |
-| `stat_label_encode(col)` | 数値 1 | 数値/行 | ラベルエンコーディング |
-| `stat_bin_width(col, n_bins)` | 数値, 整数 | 数値/行 | 等幅ビニング |
-| `stat_bin_freq(col, n_bins)` | 数値, 整数 | 数値/行 | 等頻度ビニング |
-| `stat_lag(col, k)` | 数値, 整数 | 数値/行 | ラグ（k 行前の値） |
-| `stat_diff(col, order)` | 数値, 整数 | 数値/行 | 差分 |
-| `stat_seasonal_diff(col, period)` | 数値, 整数 | 数値/行 | 季節差分 |
-| `stat_outliers_iqr(col)` | 数値 1 | 数値/行 | 外れ値検出（IQR 法、1.0/0.0） |
-| `stat_outliers_zscore(col)` | 数値 1 | 数値/行 | 外れ値検出（Z スコア法） |
-| `stat_outliers_mzscore(col)` | 数値 1 | 数値/行 | 外れ値検出（修正 Z スコア法） |
-| `stat_winsorize(col, pct)` | 数値, 整数 | 数値/行 | ウィンザライズ |
+| `stat_rolling_mean(col, window)` | numeric, integer | numeric/row | Rolling mean |
+| `stat_rolling_std(col, window)` | numeric, integer | numeric/row | Rolling standard deviation |
+| `stat_rolling_min(col, window)` | numeric, integer | numeric/row | Rolling minimum |
+| `stat_rolling_max(col, window)` | numeric, integer | numeric/row | Rolling maximum |
+| `stat_rolling_sum(col, window)` | numeric, integer | numeric/row | Rolling sum |
+| `stat_moving_avg(col, window)` | numeric, integer | numeric/row | Simple moving average |
+| `stat_ema(col, span)` | numeric, integer | numeric/row | Exponential moving average (alpha=2/(span+1)) |
+| `stat_rank(col)` | numeric x1 | numeric/row | Rank transformation |
+| `stat_fillna_mean(col)` | numeric x1 | numeric/row | Mean imputation |
+| `stat_fillna_median(col)` | numeric x1 | numeric/row | Median imputation |
+| `stat_fillna_ffill(col)` | numeric x1 | numeric/row | Forward fill |
+| `stat_fillna_bfill(col)` | numeric x1 | numeric/row | Backward fill |
+| `stat_fillna_interp(col)` | numeric x1 | numeric/row | Linear interpolation |
+| `stat_label_encode(col)` | numeric x1 | numeric/row | Label encoding |
+| `stat_bin_width(col, n_bins)` | numeric, integer | numeric/row | Equal-width binning |
+| `stat_bin_freq(col, n_bins)` | numeric, integer | numeric/row | Equal-frequency binning |
+| `stat_lag(col, k)` | numeric, integer | numeric/row | Lag (value from k rows before) |
+| `stat_diff(col, order)` | numeric, integer | numeric/row | Differencing |
+| `stat_seasonal_diff(col, period)` | numeric, integer | numeric/row | Seasonal differencing |
+| `stat_outliers_iqr(col)` | numeric x1 | numeric/row | Outlier detection (IQR method, 1.0/0.0) |
+| `stat_outliers_zscore(col)` | numeric x1 | numeric/row | Outlier detection (Z-score method) |
+| `stat_outliers_mzscore(col)` | numeric x1 | numeric/row | Outlier detection (modified Z-score method) |
+| `stat_winsorize(col, pct)` | numeric, integer | numeric/row | Winsorization |
 
-#### 複合集約関数（32関数）
+#### Composite Aggregate Functions (32 functions)
 
-結果がJSON（複数値）を返す集約関数、または2標本検定・生存時間解析などの複合集約関数。
+Aggregate functions that return JSON (multiple values), or composite aggregate functions such as two-sample tests and survival analysis.
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_modes(col)` | 数値 1 | JSON | 最頻値（すべて） |
-| `stat_five_number_summary(col)` | 数値 1 | JSON | 五数要約 (min, Q1, median, Q3, max) |
-| `stat_frequency_table(col)` | 数値 1 | JSON | 度数表 |
-| `stat_frequency_count(col)` | 数値 1 | JSON | 各値の度数 |
-| `stat_relative_frequency(col)` | 数値 1 | JSON | 相対度数 |
-| `stat_cumulative_frequency(col)` | 数値 1 | JSON | 累積度数 |
-| `stat_cumulative_relative_frequency(col)` | 数値 1 | JSON | 累積相対度数 |
-| `stat_t_test2(grp1, grp2)` | 数値, 数値 | JSON | 2標本 t 検定（プール分散） |
-| `stat_t_test_welch(grp1, grp2)` | 数値, 数値 | JSON | Welch t 検定 |
-| `stat_chisq_independence(col1, col2)` | 数値, 数値 | JSON | カイ二乗独立性検定 |
-| `stat_f_test(grp1, grp2)` | 数値, 数値 | JSON | F 検定（分散比較） |
-| `stat_mann_whitney(grp1, grp2)` | 数値, 数値 | JSON | Mann-Whitney U 検定 |
-| `stat_anova1(val, grp)` | 数値, 数値 | JSON | 一元配置分散分析 |
-| `stat_contingency_table(col1, col2)` | 数値, 数値 | JSON | 分割表作成 |
-| `stat_cohens_d2(grp1, grp2)` | 数値, 数値 | 数値 | Cohen's d（2標本） |
-| `stat_hedges_g2(grp1, grp2)` | 数値, 数値 | 数値 | Hedges' g（2標本） |
-| `stat_glass_delta(grp1, grp2)` | 数値, 数値 | 数値 | Glass's Delta |
-| `stat_ci_mean_diff(grp1, grp2)` | 数値, 数値 | JSON | 2標本平均差の信頼区間 |
-| `stat_ci_mean_diff_welch(grp1, grp2)` | 数値, 数値 | JSON | 2標本平均差の信頼区間（Welch） |
-| `stat_kaplan_meier(time, event)` | 数値, 数値 | JSON | Kaplan-Meier 生存曲線 |
-| `stat_nelson_aalen(time, event)` | 数値, 数値 | JSON | Nelson-Aalen 累積ハザード推定 |
-| `stat_logrank(time, event, grp)` | 数値, 数値, 数値 | JSON | Log-rank 検定 |
-| `stat_bootstrap(col, n)` | 数値, 数値 | JSON | 汎用ブートストラップ推定 |
-| `stat_bootstrap_bca(col, n)` | 数値, 数値 | JSON | BCa ブートストラップ |
-| `stat_bootstrap_sample(col)` | 数値 1 | JSON | ブートストラップサンプル生成 |
-| `stat_permutation_test2(grp1, grp2)` | 数値, 数値 | JSON | 2標本置換検定 |
-| `stat_permutation_paired(x, y)` | 数値, 数値 | JSON | 対応のある置換検定 |
-| `stat_permutation_corr(x, y)` | 数値, 数値 | JSON | 相関の置換検定 |
-| `stat_acf(col, max_lag)` | 数値, 数値 | JSON | 自己相関関数 |
-| `stat_pacf(col, max_lag)` | 数値, 数値 | JSON | 偏自己相関関数 |
-| `stat_sample_replace(col, n)` | 数値, 数値 | JSON | 復元抽出 |
-| `stat_sample(col, n)` | 数値, 数値 | JSON | 非復元抽出 |
+| `stat_modes(col)` | numeric x1 | JSON | Modes (all) |
+| `stat_five_number_summary(col)` | numeric x1 | JSON | Five-number summary (min, Q1, median, Q3, max) |
+| `stat_frequency_table(col)` | numeric x1 | JSON | Frequency table |
+| `stat_frequency_count(col)` | numeric x1 | JSON | Frequency count for each value |
+| `stat_relative_frequency(col)` | numeric x1 | JSON | Relative frequency |
+| `stat_cumulative_frequency(col)` | numeric x1 | JSON | Cumulative frequency |
+| `stat_cumulative_relative_frequency(col)` | numeric x1 | JSON | Cumulative relative frequency |
+| `stat_t_test2(grp1, grp2)` | numeric, numeric | JSON | Two-sample t-test (pooled variance) |
+| `stat_t_test_welch(grp1, grp2)` | numeric, numeric | JSON | Welch t-test |
+| `stat_chisq_independence(col1, col2)` | numeric, numeric | JSON | Chi-squared independence test |
+| `stat_f_test(grp1, grp2)` | numeric, numeric | JSON | F-test (variance comparison) |
+| `stat_mann_whitney(grp1, grp2)` | numeric, numeric | JSON | Mann-Whitney U test |
+| `stat_anova1(val, grp)` | numeric, numeric | JSON | One-way ANOVA |
+| `stat_contingency_table(col1, col2)` | numeric, numeric | JSON | Contingency table |
+| `stat_cohens_d2(grp1, grp2)` | numeric, numeric | numeric | Cohen's d (two-sample) |
+| `stat_hedges_g2(grp1, grp2)` | numeric, numeric | numeric | Hedges' g (two-sample) |
+| `stat_glass_delta(grp1, grp2)` | numeric, numeric | numeric | Glass's Delta |
+| `stat_ci_mean_diff(grp1, grp2)` | numeric, numeric | JSON | Confidence interval for two-sample mean difference |
+| `stat_ci_mean_diff_welch(grp1, grp2)` | numeric, numeric | JSON | Confidence interval for two-sample mean difference (Welch) |
+| `stat_kaplan_meier(time, event)` | numeric, numeric | JSON | Kaplan-Meier survival curve |
+| `stat_nelson_aalen(time, event)` | numeric, numeric | JSON | Nelson-Aalen cumulative hazard estimate |
+| `stat_logrank(time, event, grp)` | numeric, numeric, numeric | JSON | Log-rank test |
+| `stat_bootstrap(col, n)` | numeric, numeric | JSON | General bootstrap estimation |
+| `stat_bootstrap_bca(col, n)` | numeric, numeric | JSON | BCa bootstrap |
+| `stat_bootstrap_sample(col)` | numeric x1 | JSON | Bootstrap sample generation |
+| `stat_permutation_test2(grp1, grp2)` | numeric, numeric | JSON | Two-sample permutation test |
+| `stat_permutation_paired(x, y)` | numeric, numeric | JSON | Paired permutation test |
+| `stat_permutation_corr(x, y)` | numeric, numeric | JSON | Correlation permutation test |
+| `stat_acf(col, max_lag)` | numeric, numeric | JSON | Autocorrelation function |
+| `stat_pacf(col, max_lag)` | numeric, numeric | JSON | Partial autocorrelation function |
+| `stat_sample_replace(col, n)` | numeric, numeric | JSON | Sampling with replacement |
+| `stat_sample(col, n)` | numeric, numeric | JSON | Sampling without replacement |
 
-#### スカラー関数 — 検定補助（40関数）
+#### Scalar Functions -- Test Helpers (40 functions)
 
-パラメータのみで計算が完結するスカラー関数。検定の p 値計算や信頼区間の導出に必須。
+Scalar functions that compute results from parameters alone. Essential for calculating p-values and deriving confidence intervals in statistical tests.
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_normal_pdf(x [,mu, sigma])` | 1〜3 | 数値 | 正規分布 PDF |
-| `stat_normal_cdf(x [,mu, sigma])` | 1〜3 | 数値 | 正規分布 CDF |
-| `stat_normal_quantile(p [,mu, sigma])` | 1〜3 | 数値 | 正規分布分位点 |
-| `stat_normal_rand([mu, sigma])` | 0〜2 | 数値 | 正規分布乱数 |
-| `stat_chisq_pdf(x, df)` | 2 | 数値 | カイ二乗分布 PDF |
-| `stat_chisq_cdf(x, df)` | 2 | 数値 | カイ二乗分布 CDF |
-| `stat_chisq_quantile(p, df)` | 2 | 数値 | カイ二乗分布分位点 |
-| `stat_chisq_rand(df)` | 1 | 数値 | カイ二乗分布乱数 |
-| `stat_t_pdf(x, df)` | 2 | 数値 | t 分布 PDF |
-| `stat_t_cdf(x, df)` | 2 | 数値 | t 分布 CDF |
-| `stat_t_quantile(p, df)` | 2 | 数値 | t 分布分位点 |
-| `stat_t_rand(df)` | 1 | 数値 | t 分布乱数 |
-| `stat_f_pdf(x, df1, df2)` | 3 | 数値 | F 分布 PDF |
-| `stat_f_cdf(x, df1, df2)` | 3 | 数値 | F 分布 CDF |
-| `stat_f_quantile(p, df1, df2)` | 3 | 数値 | F 分布分位点 |
-| `stat_f_rand(df1, df2)` | 2 | 数値 | F 分布乱数 |
-| `stat_betainc(a, b, x)` | 3 | 数値 | 正則化不完全ベータ関数 |
-| `stat_betaincinv(a, b, p)` | 3 | 数値 | 正則化不完全ベータ逆関数 |
-| `stat_norm_cdf(x)` | 1 | 数値 | 標準正規分布 CDF |
-| `stat_norm_quantile(p)` | 1 | 数値 | 標準正規分布逆 CDF |
-| `stat_gammainc_lower(a, x)` | 2 | 数値 | 下側不完全ガンマ関数 |
-| `stat_gammainc_upper(a, x)` | 2 | 数値 | 上側不完全ガンマ関数 |
-| `stat_gammainc_lower_inv(a, p)` | 2 | 数値 | 下側不完全ガンマ逆関数 |
-| `stat_z_test_prop(x, n, p0)` | 3 | JSON | 1標本比率 z 検定 |
-| `stat_z_test_prop2(x1, n1, x2, n2)` | 4 | JSON | 2標本比率 z 検定 |
-| `stat_bonferroni(p, m)` | 2 | 数値 | Bonferroni 補正 |
-| `stat_bh_correction(p, rank, total)` | 3 | 数値 | Benjamini-Hochberg 補正 |
-| `stat_holm_correction(p, rank, total)` | 3 | 数値 | Holm 補正 |
-| `stat_fisher_exact(a, b, c, d)` | 4 | JSON | Fisher 正確確率検定 |
-| `stat_odds_ratio(a, b, c, d)` | 4 | 数値 | オッズ比 |
-| `stat_relative_risk(a, b, c, d)` | 4 | 数値 | 相対リスク |
-| `stat_risk_difference(a, b, c, d)` | 4 | 数値 | リスク差 |
-| `stat_nnt(a, b, c, d)` | 4 | 数値 | 治療必要数 (NNT) |
-| `stat_ci_prop(x, n [,confidence])` | 2〜3 | JSON | 比率の信頼区間（Wald 法） |
-| `stat_ci_prop_wilson(x, n [,confidence])` | 2〜3 | JSON | 比率の信頼区間（Wilson 法） |
-| `stat_ci_prop_diff(x1, n1, x2, n2 [,conf])` | 4〜5 | JSON | 2標本比率差の信頼区間 |
-| `stat_aic(log_likelihood, k)` | 2 | 数値 | AIC |
-| `stat_aicc(log_likelihood, n, k)` | 3 | 数値 | 補正 AIC (AICc) |
-| `stat_bic(log_likelihood, n, k)` | 3 | 数値 | BIC |
-| `stat_boxcox(x, lambda)` | 2 | 数値 | Box-Cox 変換 |
+| `stat_normal_pdf(x [,mu, sigma])` | 1-3 | numeric | Normal distribution PDF |
+| `stat_normal_cdf(x [,mu, sigma])` | 1-3 | numeric | Normal distribution CDF |
+| `stat_normal_quantile(p [,mu, sigma])` | 1-3 | numeric | Normal distribution quantile |
+| `stat_normal_rand([mu, sigma])` | 0-2 | numeric | Normal distribution random variate |
+| `stat_chisq_pdf(x, df)` | 2 | numeric | Chi-squared distribution PDF |
+| `stat_chisq_cdf(x, df)` | 2 | numeric | Chi-squared distribution CDF |
+| `stat_chisq_quantile(p, df)` | 2 | numeric | Chi-squared distribution quantile |
+| `stat_chisq_rand(df)` | 1 | numeric | Chi-squared distribution random variate |
+| `stat_t_pdf(x, df)` | 2 | numeric | t-distribution PDF |
+| `stat_t_cdf(x, df)` | 2 | numeric | t-distribution CDF |
+| `stat_t_quantile(p, df)` | 2 | numeric | t-distribution quantile |
+| `stat_t_rand(df)` | 1 | numeric | t-distribution random variate |
+| `stat_f_pdf(x, df1, df2)` | 3 | numeric | F-distribution PDF |
+| `stat_f_cdf(x, df1, df2)` | 3 | numeric | F-distribution CDF |
+| `stat_f_quantile(p, df1, df2)` | 3 | numeric | F-distribution quantile |
+| `stat_f_rand(df1, df2)` | 2 | numeric | F-distribution random variate |
+| `stat_betainc(a, b, x)` | 3 | numeric | Regularized incomplete beta function |
+| `stat_betaincinv(a, b, p)` | 3 | numeric | Inverse regularized incomplete beta function |
+| `stat_norm_cdf(x)` | 1 | numeric | Standard normal distribution CDF |
+| `stat_norm_quantile(p)` | 1 | numeric | Standard normal distribution inverse CDF |
+| `stat_gammainc_lower(a, x)` | 2 | numeric | Lower incomplete gamma function |
+| `stat_gammainc_upper(a, x)` | 2 | numeric | Upper incomplete gamma function |
+| `stat_gammainc_lower_inv(a, p)` | 2 | numeric | Inverse lower incomplete gamma function |
+| `stat_z_test_prop(x, n, p0)` | 3 | JSON | One-sample proportion z-test |
+| `stat_z_test_prop2(x1, n1, x2, n2)` | 4 | JSON | Two-sample proportion z-test |
+| `stat_bonferroni(p, m)` | 2 | numeric | Bonferroni correction |
+| `stat_bh_correction(p, rank, total)` | 3 | numeric | Benjamini-Hochberg correction |
+| `stat_holm_correction(p, rank, total)` | 3 | numeric | Holm correction |
+| `stat_fisher_exact(a, b, c, d)` | 4 | JSON | Fisher's exact test |
+| `stat_odds_ratio(a, b, c, d)` | 4 | numeric | Odds ratio |
+| `stat_relative_risk(a, b, c, d)` | 4 | numeric | Relative risk |
+| `stat_risk_difference(a, b, c, d)` | 4 | numeric | Risk difference |
+| `stat_nnt(a, b, c, d)` | 4 | numeric | Number needed to treat (NNT) |
+| `stat_ci_prop(x, n [,confidence])` | 2-3 | JSON | Confidence interval for proportion (Wald method) |
+| `stat_ci_prop_wilson(x, n [,confidence])` | 2-3 | JSON | Confidence interval for proportion (Wilson method) |
+| `stat_ci_prop_diff(x1, n1, x2, n2 [,conf])` | 4-5 | JSON | Confidence interval for two-sample proportion difference |
+| `stat_aic(log_likelihood, k)` | 2 | numeric | AIC |
+| `stat_aicc(log_likelihood, n, k)` | 3 | numeric | Corrected AIC (AICc) |
+| `stat_bic(log_likelihood, n, k)` | 3 | numeric | BIC |
+| `stat_boxcox(x, lambda)` | 2 | numeric | Box-Cox transformation |
 
-#### スカラー関数 — 分布・変換（83関数）
+#### Scalar Functions -- Distribution & Transformation (83 functions)
 
-パラメータのみで計算が完結する電卓的スカラー関数。分布関数、効果量変換、検出力分析など。
+Calculator-style scalar functions that compute results from parameters alone. Distribution functions, effect size conversions, power analysis, and more.
 
-| 関数 | 引数 | 戻り値 | 説明 |
+| Function | Arguments | Return | Description |
 |---|---|---|---|
-| `stat_uniform_pdf(x [,a, b])` | 1〜3 | 数値 | 一様分布 PDF |
-| `stat_uniform_cdf(x [,a, b])` | 1〜3 | 数値 | 一様分布 CDF |
-| `stat_uniform_quantile(p [,a, b])` | 1〜3 | 数値 | 一様分布分位点 |
-| `stat_uniform_rand([a, b])` | 0〜2 | 数値 | 一様分布乱数 |
-| `stat_exponential_pdf(x [,lambda])` | 1〜2 | 数値 | 指数分布 PDF |
-| `stat_exponential_cdf(x [,lambda])` | 1〜2 | 数値 | 指数分布 CDF |
-| `stat_exponential_quantile(p [,lambda])` | 1〜2 | 数値 | 指数分布分位点 |
-| `stat_exponential_rand([lambda])` | 0〜1 | 数値 | 指数分布乱数 |
-| `stat_gamma_pdf(x, shape, scale)` | 3 | 数値 | ガンマ分布 PDF |
-| `stat_gamma_cdf(x, shape, scale)` | 3 | 数値 | ガンマ分布 CDF |
-| `stat_gamma_quantile(p, shape, scale)` | 3 | 数値 | ガンマ分布分位点 |
-| `stat_gamma_rand(shape, scale)` | 2 | 数値 | ガンマ分布乱数 |
-| `stat_beta_pdf(x, alpha, beta)` | 3 | 数値 | ベータ分布 PDF |
-| `stat_beta_cdf(x, alpha, beta)` | 3 | 数値 | ベータ分布 CDF |
-| `stat_beta_quantile(p, alpha, beta)` | 3 | 数値 | ベータ分布分位点 |
-| `stat_beta_rand(alpha, beta)` | 2 | 数値 | ベータ分布乱数 |
-| `stat_lognormal_pdf(x [,mu, sigma])` | 1〜3 | 数値 | 対数正規分布 PDF |
-| `stat_lognormal_cdf(x [,mu, sigma])` | 1〜3 | 数値 | 対数正規分布 CDF |
-| `stat_lognormal_quantile(p [,mu, sigma])` | 1〜3 | 数値 | 対数正規分布分位点 |
-| `stat_lognormal_rand([mu, sigma])` | 0〜2 | 数値 | 対数正規分布乱数 |
-| `stat_weibull_pdf(x, shape, scale)` | 3 | 数値 | ワイブル分布 PDF |
-| `stat_weibull_cdf(x, shape, scale)` | 3 | 数値 | ワイブル分布 CDF |
-| `stat_weibull_quantile(p, shape, scale)` | 3 | 数値 | ワイブル分布分位点 |
-| `stat_weibull_rand(shape, scale)` | 2 | 数値 | ワイブル分布乱数 |
-| `stat_binomial_pmf(k, n, p)` | 3 | 数値 | 二項分布 PMF |
-| `stat_binomial_cdf(k, n, p)` | 3 | 数値 | 二項分布 CDF |
-| `stat_binomial_quantile(q, n, p)` | 3 | 数値 | 二項分布分位点 |
-| `stat_binomial_rand(n, p)` | 2 | 数値 | 二項分布乱数 |
-| `stat_poisson_pmf(k, lambda)` | 2 | 数値 | ポアソン分布 PMF |
-| `stat_poisson_cdf(k, lambda)` | 2 | 数値 | ポアソン分布 CDF |
-| `stat_poisson_quantile(q, lambda)` | 2 | 数値 | ポアソン分布分位点 |
-| `stat_poisson_rand(lambda)` | 1 | 数値 | ポアソン分布乱数 |
-| `stat_geometric_pmf(k, p)` | 2 | 数値 | 幾何分布 PMF |
-| `stat_geometric_cdf(k, p)` | 2 | 数値 | 幾何分布 CDF |
-| `stat_geometric_quantile(q, p)` | 2 | 数値 | 幾何分布分位点 |
-| `stat_geometric_rand(p)` | 1 | 数値 | 幾何分布乱数 |
-| `stat_nbinom_pmf(k, r, p)` | 3 | 数値 | 負の二項分布 PMF |
-| `stat_nbinom_cdf(k, r, p)` | 3 | 数値 | 負の二項分布 CDF |
-| `stat_nbinom_quantile(q, r, p)` | 3 | 数値 | 負の二項分布分位点 |
-| `stat_nbinom_rand(r, p)` | 2 | 数値 | 負の二項分布乱数 |
-| `stat_hypergeom_pmf(k, N, K, n)` | 4 | 数値 | 超幾何分布 PMF |
-| `stat_hypergeom_cdf(k, N, K, n)` | 4 | 数値 | 超幾何分布 CDF |
-| `stat_hypergeom_quantile(q, N, K, n)` | 4 | 数値 | 超幾何分布分位点 |
-| `stat_hypergeom_rand(N, K, n)` | 3 | 数値 | 超幾何分布乱数 |
-| `stat_bernoulli_pmf(k, p)` | 2 | 数値 | ベルヌーイ分布 PMF |
-| `stat_bernoulli_cdf(k, p)` | 2 | 数値 | ベルヌーイ分布 CDF |
-| `stat_bernoulli_quantile(q, p)` | 2 | 数値 | ベルヌーイ分布分位点 |
-| `stat_bernoulli_rand(p)` | 1 | 数値 | ベルヌーイ分布乱数 |
-| `stat_duniform_pmf(k, a, b)` | 3 | 数値 | 離散一様分布 PMF |
-| `stat_duniform_cdf(k, a, b)` | 3 | 数値 | 離散一様分布 CDF |
-| `stat_duniform_quantile(q, a, b)` | 3 | 数値 | 離散一様分布分位点 |
-| `stat_duniform_rand(a, b)` | 2 | 数値 | 離散一様分布乱数 |
-| `stat_binomial_coef(n, k)` | 2 | 整数 | 二項係数 |
-| `stat_log_binomial_coef(n, k)` | 2 | 数値 | 対数二項係数 |
-| `stat_log_factorial(n)` | 1 | 数値 | 対数階乗 |
-| `stat_lgamma(x)` | 1 | 数値 | 対数ガンマ関数 |
-| `stat_tgamma(x)` | 1 | 数値 | ガンマ関数 |
-| `stat_beta_func(a, b)` | 2 | 数値 | ベータ関数 |
-| `stat_lbeta(a, b)` | 2 | 数値 | 対数ベータ関数 |
-| `stat_erf(x)` | 1 | 数値 | 誤差関数 |
-| `stat_erfc(x)` | 1 | 数値 | 相補誤差関数 |
-| `stat_logarithmic_mean(a, b)` | 2 | 数値 | 対数平均 |
-| `stat_hedges_j(n)` | 1 | 数値 | Hedges 補正係数 |
-| `stat_t_to_r(t, df)` | 2 | 数値 | t値 → 相関係数変換 |
-| `stat_d_to_r(d)` | 1 | 数値 | Cohen's d → 相関係数変換 |
-| `stat_r_to_d(r)` | 1 | 数値 | 相関係数 → Cohen's d 変換 |
-| `stat_eta_squared_ef(ss_effect, ss_total)` | 2 | 数値 | イータ二乗（効果量） |
-| `stat_partial_eta_sq(F, df1, df2)` | 3 | 数値 | 偏イータ二乗 |
-| `stat_omega_squared_ef(ss_effect, ss_total, ms_error, df_effect)` | 4 | 数値 | オメガ二乗（効果量） |
-| `stat_cohens_h(p1, p2)` | 2 | 数値 | Cohen's h（比率差） |
-| `stat_interpret_d(d)` | 1 | テキスト | Cohen's d の解釈 |
-| `stat_interpret_r(r)` | 1 | テキスト | 相関係数の解釈 |
-| `stat_interpret_eta2(eta2)` | 1 | テキスト | イータ二乗の解釈 |
-| `stat_power_t1(d, n, alpha)` | 3 | 数値 | 1標本 t 検定の検出力 |
-| `stat_n_t1(d, power, alpha)` | 3 | 数値 | 1標本 t 検定の必要サンプルサイズ |
-| `stat_power_t2(d, n1, n2, alpha)` | 4 | 数値 | 2標本 t 検定の検出力 |
-| `stat_n_t2(d, power, alpha)` | 3 | 数値 | 2標本 t 検定の必要サンプルサイズ |
-| `stat_power_prop(p1, p2, n, alpha)` | 4 | 数値 | 比率検定の検出力 |
-| `stat_n_prop(p1, p2, power, alpha)` | 4 | 数値 | 比率検定の必要サンプルサイズ |
-| `stat_moe_prop(x, n [,confidence])` | 2〜3 | 数値 | 比率の誤差マージン |
-| `stat_moe_prop_worst(n [,confidence])` | 1〜2 | 数値 | 最悪ケースの誤差マージン |
-| `stat_n_moe_prop(moe [,confidence [,p]])` | 1〜3 | 数値 | 比率推定のサンプルサイズ |
-| `stat_n_moe_mean(moe, sigma [,confidence])` | 2〜3 | 数値 | 平均推定のサンプルサイズ |
+| `stat_uniform_pdf(x [,a, b])` | 1-3 | numeric | Uniform distribution PDF |
+| `stat_uniform_cdf(x [,a, b])` | 1-3 | numeric | Uniform distribution CDF |
+| `stat_uniform_quantile(p [,a, b])` | 1-3 | numeric | Uniform distribution quantile |
+| `stat_uniform_rand([a, b])` | 0-2 | numeric | Uniform distribution random variate |
+| `stat_exponential_pdf(x [,lambda])` | 1-2 | numeric | Exponential distribution PDF |
+| `stat_exponential_cdf(x [,lambda])` | 1-2 | numeric | Exponential distribution CDF |
+| `stat_exponential_quantile(p [,lambda])` | 1-2 | numeric | Exponential distribution quantile |
+| `stat_exponential_rand([lambda])` | 0-1 | numeric | Exponential distribution random variate |
+| `stat_gamma_pdf(x, shape, scale)` | 3 | numeric | Gamma distribution PDF |
+| `stat_gamma_cdf(x, shape, scale)` | 3 | numeric | Gamma distribution CDF |
+| `stat_gamma_quantile(p, shape, scale)` | 3 | numeric | Gamma distribution quantile |
+| `stat_gamma_rand(shape, scale)` | 2 | numeric | Gamma distribution random variate |
+| `stat_beta_pdf(x, alpha, beta)` | 3 | numeric | Beta distribution PDF |
+| `stat_beta_cdf(x, alpha, beta)` | 3 | numeric | Beta distribution CDF |
+| `stat_beta_quantile(p, alpha, beta)` | 3 | numeric | Beta distribution quantile |
+| `stat_beta_rand(alpha, beta)` | 2 | numeric | Beta distribution random variate |
+| `stat_lognormal_pdf(x [,mu, sigma])` | 1-3 | numeric | Log-normal distribution PDF |
+| `stat_lognormal_cdf(x [,mu, sigma])` | 1-3 | numeric | Log-normal distribution CDF |
+| `stat_lognormal_quantile(p [,mu, sigma])` | 1-3 | numeric | Log-normal distribution quantile |
+| `stat_lognormal_rand([mu, sigma])` | 0-2 | numeric | Log-normal distribution random variate |
+| `stat_weibull_pdf(x, shape, scale)` | 3 | numeric | Weibull distribution PDF |
+| `stat_weibull_cdf(x, shape, scale)` | 3 | numeric | Weibull distribution CDF |
+| `stat_weibull_quantile(p, shape, scale)` | 3 | numeric | Weibull distribution quantile |
+| `stat_weibull_rand(shape, scale)` | 2 | numeric | Weibull distribution random variate |
+| `stat_binomial_pmf(k, n, p)` | 3 | numeric | Binomial distribution PMF |
+| `stat_binomial_cdf(k, n, p)` | 3 | numeric | Binomial distribution CDF |
+| `stat_binomial_quantile(q, n, p)` | 3 | numeric | Binomial distribution quantile |
+| `stat_binomial_rand(n, p)` | 2 | numeric | Binomial distribution random variate |
+| `stat_poisson_pmf(k, lambda)` | 2 | numeric | Poisson distribution PMF |
+| `stat_poisson_cdf(k, lambda)` | 2 | numeric | Poisson distribution CDF |
+| `stat_poisson_quantile(q, lambda)` | 2 | numeric | Poisson distribution quantile |
+| `stat_poisson_rand(lambda)` | 1 | numeric | Poisson distribution random variate |
+| `stat_geometric_pmf(k, p)` | 2 | numeric | Geometric distribution PMF |
+| `stat_geometric_cdf(k, p)` | 2 | numeric | Geometric distribution CDF |
+| `stat_geometric_quantile(q, p)` | 2 | numeric | Geometric distribution quantile |
+| `stat_geometric_rand(p)` | 1 | numeric | Geometric distribution random variate |
+| `stat_nbinom_pmf(k, r, p)` | 3 | numeric | Negative binomial distribution PMF |
+| `stat_nbinom_cdf(k, r, p)` | 3 | numeric | Negative binomial distribution CDF |
+| `stat_nbinom_quantile(q, r, p)` | 3 | numeric | Negative binomial distribution quantile |
+| `stat_nbinom_rand(r, p)` | 2 | numeric | Negative binomial distribution random variate |
+| `stat_hypergeom_pmf(k, N, K, n)` | 4 | numeric | Hypergeometric distribution PMF |
+| `stat_hypergeom_cdf(k, N, K, n)` | 4 | numeric | Hypergeometric distribution CDF |
+| `stat_hypergeom_quantile(q, N, K, n)` | 4 | numeric | Hypergeometric distribution quantile |
+| `stat_hypergeom_rand(N, K, n)` | 3 | numeric | Hypergeometric distribution random variate |
+| `stat_bernoulli_pmf(k, p)` | 2 | numeric | Bernoulli distribution PMF |
+| `stat_bernoulli_cdf(k, p)` | 2 | numeric | Bernoulli distribution CDF |
+| `stat_bernoulli_quantile(q, p)` | 2 | numeric | Bernoulli distribution quantile |
+| `stat_bernoulli_rand(p)` | 1 | numeric | Bernoulli distribution random variate |
+| `stat_duniform_pmf(k, a, b)` | 3 | numeric | Discrete uniform distribution PMF |
+| `stat_duniform_cdf(k, a, b)` | 3 | numeric | Discrete uniform distribution CDF |
+| `stat_duniform_quantile(q, a, b)` | 3 | numeric | Discrete uniform distribution quantile |
+| `stat_duniform_rand(a, b)` | 2 | numeric | Discrete uniform distribution random variate |
+| `stat_binomial_coef(n, k)` | 2 | integer | Binomial coefficient |
+| `stat_log_binomial_coef(n, k)` | 2 | numeric | Log binomial coefficient |
+| `stat_log_factorial(n)` | 1 | numeric | Log factorial |
+| `stat_lgamma(x)` | 1 | numeric | Log-gamma function |
+| `stat_tgamma(x)` | 1 | numeric | Gamma function |
+| `stat_beta_func(a, b)` | 2 | numeric | Beta function |
+| `stat_lbeta(a, b)` | 2 | numeric | Log-beta function |
+| `stat_erf(x)` | 1 | numeric | Error function |
+| `stat_erfc(x)` | 1 | numeric | Complementary error function |
+| `stat_logarithmic_mean(a, b)` | 2 | numeric | Logarithmic mean |
+| `stat_hedges_j(n)` | 1 | numeric | Hedges correction factor |
+| `stat_t_to_r(t, df)` | 2 | numeric | t-value to correlation coefficient conversion |
+| `stat_d_to_r(d)` | 1 | numeric | Cohen's d to correlation coefficient conversion |
+| `stat_r_to_d(r)` | 1 | numeric | Correlation coefficient to Cohen's d conversion |
+| `stat_eta_squared_ef(ss_effect, ss_total)` | 2 | numeric | Eta-squared (effect size) |
+| `stat_partial_eta_sq(F, df1, df2)` | 3 | numeric | Partial eta-squared |
+| `stat_omega_squared_ef(ss_effect, ss_total, ms_error, df_effect)` | 4 | numeric | Omega-squared (effect size) |
+| `stat_cohens_h(p1, p2)` | 2 | numeric | Cohen's h (proportion difference) |
+| `stat_interpret_d(d)` | 1 | text | Interpretation of Cohen's d |
+| `stat_interpret_r(r)` | 1 | text | Interpretation of correlation coefficient |
+| `stat_interpret_eta2(eta2)` | 1 | text | Interpretation of eta-squared |
+| `stat_power_t1(d, n, alpha)` | 3 | numeric | Power of one-sample t-test |
+| `stat_n_t1(d, power, alpha)` | 3 | numeric | Required sample size for one-sample t-test |
+| `stat_power_t2(d, n1, n2, alpha)` | 4 | numeric | Power of two-sample t-test |
+| `stat_n_t2(d, power, alpha)` | 3 | numeric | Required sample size for two-sample t-test |
+| `stat_power_prop(p1, p2, n, alpha)` | 4 | numeric | Power of proportion test |
+| `stat_n_prop(p1, p2, power, alpha)` | 4 | numeric | Required sample size for proportion test |
+| `stat_moe_prop(x, n [,confidence])` | 2-3 | numeric | Margin of error for proportion |
+| `stat_moe_prop_worst(n [,confidence])` | 1-2 | numeric | Worst-case margin of error |
+| `stat_n_moe_prop(moe [,confidence [,p]])` | 1-3 | numeric | Sample size for proportion estimation |
+| `stat_n_moe_mean(moe, sigma [,confidence])` | 2-3 | numeric | Sample size for mean estimation |
 
-すべての集約関数は `NULL` 入力行を無視する（SQLite3 の集約関数の慣例に準拠）。
-ウィンドウ関数は `NULL` 入力を追跡し、結果で `NULL` を返すか補完する（関数依存）。
-スカラー関数は引数に `NULL` が含まれる場合 `NULL` を返す。
-すべての行が `NULL` または結果セットが空の場合は `NULL` を返す。
-計算結果が `NaN` または `Inf` の場合は `NULL` を返す。
-乱数関数（`*_rand`）は非決定的（`SQLITE_DETERMINISTIC` フラグなし）で登録される。
+All aggregate functions ignore `NULL` input rows (following SQLite3 aggregate function conventions).
+Window functions track `NULL` inputs and either return `NULL` or impute values in the result (function-dependent).
+Scalar functions return `NULL` if any argument is `NULL`.
+`NULL` is returned when all rows are `NULL` or the result set is empty.
+`NULL` is returned when the computed result is `NaN` or `Inf`.
+Random variate functions (`*_rand`) are registered as non-deterministic (without the `SQLITE_DETERMINISTIC` flag).
 
 ---
 
-## 3. ビルドと実行
+## 3. Build and Run
 
 ```bash
-# ビルド
+# Build
 cmake -B build
 cmake --build build
 
-# 実行 (C++ テストプログラム)
+# Run (C++ test program)
 ./build/a.out
 ```
 
-### sqlite3 CLI からの利用
+### Using from sqlite3 CLI
 
-ビルドした拡張ライブラリは、`sqlite3` コマンドラインツールからも利用できる。
+The built extension library can also be used from the `sqlite3` command-line tool.
 
-#### 前提条件
+#### Prerequisites
 
-`sqlite3` CLI 自体が `SQLITE_ENABLE_LOAD_EXTENSION` 付きでビルドされている必要がある。
-macOS 標準の `sqlite3` は有効になっている。
+The `sqlite3` CLI itself must be built with `SQLITE_ENABLE_LOAD_EXTENSION` enabled.
+The macOS standard `sqlite3` has this enabled.
 
-#### 方法1: `.load` ドットコマンド（推奨）
+#### Method 1: `.load` dot-command (recommended)
 
 ```bash
 cd build
@@ -429,83 +431,83 @@ sqlite> SELECT stat_sample_stddev(val) FROM data;
 sqlite> SELECT category, stat_mean(score) FROM exam GROUP BY category;
 ```
 
-`.load` の第1引数がライブラリパス、第2引数がエントリポイント名。
-拡張子 (`.dylib`) は省略可能（SQLite が自動補完する）。
+The first argument to `.load` is the library path, and the second argument is the entry point name.
+The file extension (`.dylib`) can be omitted (SQLite auto-completes it).
 
-#### 方法2: `load_extension()` SQL 関数
+#### Method 2: `load_extension()` SQL function
 
 ```sql
 SELECT load_extension('./ext_funcs', 'sqlite3_ext_funcs_init');
 SELECT square(7);
 ```
 
-この方法は `.load` より制限が厳しく、
-`sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL)` で
-別途有効化されている必要がある。通常は `.load` を使う方が確実。
+This method has stricter restrictions than `.load` and requires separate enablement via
+`sqlite3_db_config(db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL)`.
+Using `.load` is generally more reliable.
 
-#### エントリポイント名の指定が必要な理由
+#### Why Entry Point Name Must Be Specified
 
-SQLite はファイル名からエントリポイント名を自動推定するが、
-`ext_funcs` → `sqlite3_extfuncs_init` のように `_` が除去される。
-実際のエントリポイント名は `sqlite3_ext_funcs_init` なので、
-第2引数で明示的に指定する必要がある。
+SQLite auto-infers the entry point name from the filename, but
+`ext_funcs` becomes `sqlite3_extfuncs_init` with `_` stripped.
+Since the actual entry point name is `sqlite3_ext_funcs_init`,
+it must be explicitly specified as the second argument.
 
 ---
 
-## 4. Loadable Extension の仕組み
+## 4. How Loadable Extensions Work
 
-### 全体の流れ
+### Overall Flow
 
 ```text
 1. main.cpp: sqlite3_enable_load_extension(db, 1)
-   └─ 拡張ロードを有効化
+   └─ Enable extension loading
 
 2. main.cpp: sqlite3_load_extension(db, "ext_funcs.dylib", "sqlite3_ext_funcs_init", ...)
-   └─ dyld がダイナミックライブラリをロード
-   └─ エントリポイント関数を呼び出す
+   └─ dyld loads the dynamic library
+   └─ Calls the entry point function
 
 3. ext_funcs: sqlite3_ext_funcs_init(db, ...)
-   └─ SQLITE_EXTENSION_INIT2(pApi) で API ルーチンを初期化
-   └─ sqlite3_create_function() でカスタム関数を登録
+   └─ Initialize API routines with SQLITE_EXTENSION_INIT2(pApi)
+   └─ Register custom functions with sqlite3_create_function()
 
 4. main.cpp: SELECT square(5), upper('hello'), sha256_agg(content), ...
-   └─ SQLite が登録済みのコールバック関数を呼び出す
+   └─ SQLite calls the registered callback functions
 ```
 
-### エントリポイントの命名規則
+### Entry Point Naming Convention
 
-SQLite はライブラリファイル名からエントリポイント名を推測する:
+SQLite infers the entry point name from the library filename:
 
 ```text
 ext_funcs.dylib → sqlite3_ext_funcs_init
 ```
 
-ファイル名に `-` や `.` が含まれる場合は自動推測が失敗するため、
-`sqlite3_load_extension()` の第3引数で明示的に指定する。
+If the filename contains `-` or `.`, auto-inference will fail, so
+the entry point must be explicitly specified as the third argument of `sqlite3_load_extension()`.
 
-### 必須マクロ
+### Required Macros
 
 ```cpp
 #include <sqlite3ext.h>
 
-SQLITE_EXTENSION_INIT1              // グローバルスコープに1回
+SQLITE_EXTENSION_INIT1              // Once at global scope
 // ...
 extern "C"
 int sqlite3_ext_funcs_init(...) {
-    SQLITE_EXTENSION_INIT2(pApi);   // エントリポイントの先頭に1回
+    SQLITE_EXTENSION_INIT2(pApi);   // Once at the beginning of the entry point
     // ...
 }
 ```
 
-- `SQLITE_EXTENSION_INIT1`: SQLite API のグローバルポインタを宣言する
-- `SQLITE_EXTENSION_INIT2(pApi)`: ホストアプリから渡された API ポインタを設定する
-- `extern "C"`: C++ でコンパイルする場合、エントリポイントに C リンケージを指定する
+- `SQLITE_EXTENSION_INIT1`: Declares the global pointer for the SQLite API
+- `SQLITE_EXTENSION_INIT2(pApi)`: Sets the API pointer passed from the host application
+- `extern "C"`: Specifies C linkage for the entry point when compiling with C++
 
-これがないと `sqlite3_create_function` 等の API を呼び出せない。
+Without these, API calls such as `sqlite3_create_function` cannot be made.
 
-### コンパイルフラグ
+### Compile Flags
 
-ホスト側 (SQLite 本体) で `SQLITE_ENABLE_LOAD_EXTENSION` を有効にする必要がある:
+`SQLITE_ENABLE_LOAD_EXTENSION` must be enabled on the host side (SQLite core):
 
 ```cmake
 target_compile_definitions(sqlite3 PUBLIC SQLITE_ENABLE_LOAD_EXTENSION)
@@ -513,182 +515,182 @@ target_compile_definitions(sqlite3 PUBLIC SQLITE_ENABLE_LOAD_EXTENSION)
 
 ---
 
-## 5. 拡張関数の実装パターン
+## 5. Extension Function Implementation Patterns
 
-### 5.1. 関数登録 (sqlite3_create_function)
+### 5.1. Function Registration (sqlite3_create_function)
 
 ```cpp
 int sqlite3_create_function(
-    sqlite3 *db,              // データベース接続
-    const char *zFunctionName,// SQL関数名
-    int nArg,                 // 引数の数 (-1 で可変長)
-    int eTextRep,             // テキストエンコーディング + フラグ
-    void *pApp,               // コールバックに渡すユーザデータ (任意)
-    void (*xFunc)(...),       // スカラー関数コールバック
-    void (*xStep)(...),       // 集約関数の1行ごとの処理 (nullptrならスカラー)
-    void (*xFinal)(...)       // 集約関数の最終処理 (nullptrならスカラー)
+    sqlite3 *db,              // Database connection
+    const char *zFunctionName,// SQL function name
+    int nArg,                 // Number of arguments (-1 for variadic)
+    int eTextRep,             // Text encoding + flags
+    void *pApp,               // User data passed to callbacks (optional)
+    void (*xFunc)(...),       // Scalar function callback
+    void (*xStep)(...),       // Per-row processing for aggregate functions (nullptr for scalar)
+    void (*xFinal)(...)       // Final processing for aggregate functions (nullptr for scalar)
 );
 ```
 
-#### eTextRep に指定するフラグ
+#### Flags for eTextRep
 
-| フラグ | 意味 |
+| Flag | Meaning |
 |---|---|
-| `SQLITE_UTF8` | UTF-8 テキスト (通常はこれ) |
-| `SQLITE_UTF16` | UTF-16 テキスト |
-| `SQLITE_DETERMINISTIC` | 同じ入力に対して常に同じ結果を返す (最適化ヒント) |
-| `SQLITE_INNOCUOUS` | 副作用がなく安全 (SQLite 3.31+) |
-| `SQLITE_DIRECTONLY` | SQL内からのみ呼び出し可能 (SQLite 3.30+) |
+| `SQLITE_UTF8` | UTF-8 text (typically this one) |
+| `SQLITE_UTF16` | UTF-16 text |
+| `SQLITE_DETERMINISTIC` | Always returns the same result for the same input (optimization hint) |
+| `SQLITE_INNOCUOUS` | No side effects, safe (SQLite 3.31+) |
+| `SQLITE_DIRECTONLY` | Can only be called from SQL (SQLite 3.30+) |
 
-### 5.2. コールバック関数のシグネチャ
+### 5.2. Callback Function Signature
 
 ```cpp
 void callback(sqlite3_context *ctx, int argc, sqlite3_value **argv);
 ```
 
-- `ctx`: 結果の返却やエラー通知に使うコンテキスト
-- `argc`: 引数の数
-- `argv`: 引数の配列
+- `ctx`: Context used for returning results and reporting errors
+- `argc`: Number of arguments
+- `argv`: Array of arguments
 
-### 5.3. 引数の取得 (sqlite3_value_*)
+### 5.3. Retrieving Arguments (sqlite3_value_*)
 
-| 関数 | 戻り値の型 | 説明 |
+| Function | Return Type | Description |
 |---|---|---|
-| `sqlite3_value_type(v)` | `int` | 値の型を返す (下記の型定数) |
-| `sqlite3_value_int(v)` | `int` | 32bit 整数として取得 |
-| `sqlite3_value_int64(v)` | `sqlite3_int64` | 64bit 整数として取得 |
-| `sqlite3_value_double(v)` | `double` | 浮動小数点として取得 |
-| `sqlite3_value_text(v)` | `const unsigned char *` | UTF-8 文字列として取得 |
-| `sqlite3_value_text16(v)` | `const void *` | UTF-16 文字列として取得 |
-| `sqlite3_value_blob(v)` | `const void *` | BLOB データとして取得 |
-| `sqlite3_value_bytes(v)` | `int` | text/blob のバイト数 |
+| `sqlite3_value_type(v)` | `int` | Returns the type of the value (see type constants below) |
+| `sqlite3_value_int(v)` | `int` | Retrieve as 32-bit integer |
+| `sqlite3_value_int64(v)` | `sqlite3_int64` | Retrieve as 64-bit integer |
+| `sqlite3_value_double(v)` | `double` | Retrieve as floating point |
+| `sqlite3_value_text(v)` | `const unsigned char *` | Retrieve as UTF-8 string |
+| `sqlite3_value_text16(v)` | `const void *` | Retrieve as UTF-16 string |
+| `sqlite3_value_blob(v)` | `const void *` | Retrieve as BLOB data |
+| `sqlite3_value_bytes(v)` | `int` | Byte count of text/blob |
 
-#### 型定数 (sqlite3_value_type の戻り値)
+#### Type Constants (return values of sqlite3_value_type)
 
-| 定数 | 値 | 説明 |
+| Constant | Value | Description |
 |---|---|---|
-| `SQLITE_INTEGER` | 1 | 整数 |
-| `SQLITE_FLOAT` | 2 | 浮動小数点 |
-| `SQLITE_TEXT` | 3 | テキスト |
-| `SQLITE_BLOB` | 4 | バイナリ |
+| `SQLITE_INTEGER` | 1 | Integer |
+| `SQLITE_FLOAT` | 2 | Floating point |
+| `SQLITE_TEXT` | 3 | Text |
+| `SQLITE_BLOB` | 4 | Binary |
 | `SQLITE_NULL` | 5 | NULL |
 
-### 5.4. 結果の返却 (sqlite3_result_*)
+### 5.4. Returning Results (sqlite3_result_*)
 
-#### スカラー値を返す
+#### Returning Scalar Values
 
-| 関数 | 返す型 | 対応する C++ 型 |
+| Function | Return Type | C++ Type |
 |---|---|---|
-| `sqlite3_result_int(ctx, int)` | 32bit 整数 | `int` |
-| `sqlite3_result_int64(ctx, sqlite3_int64)` | 64bit 整数 | `sqlite3_int64` |
-| `sqlite3_result_double(ctx, double)` | 浮動小数点 | `double` |
-| `sqlite3_result_text(ctx, str, len, destructor)` | UTF-8 文字列 | `const char *` |
-| `sqlite3_result_text16(ctx, str, len, destructor)` | UTF-16 文字列 | `const void *` |
-| `sqlite3_result_blob(ctx, data, len, destructor)` | バイナリデータ | `const void *` |
+| `sqlite3_result_int(ctx, int)` | 32-bit integer | `int` |
+| `sqlite3_result_int64(ctx, sqlite3_int64)` | 64-bit integer | `sqlite3_int64` |
+| `sqlite3_result_double(ctx, double)` | Floating point | `double` |
+| `sqlite3_result_text(ctx, str, len, destructor)` | UTF-8 string | `const char *` |
+| `sqlite3_result_text16(ctx, str, len, destructor)` | UTF-16 string | `const void *` |
+| `sqlite3_result_blob(ctx, data, len, destructor)` | Binary data | `const void *` |
 | `sqlite3_result_null(ctx)` | NULL | -- |
 
-#### 特殊な返却
+#### Special Returns
 
-| 関数 | 用途 |
+| Function | Usage |
 |---|---|
-| `sqlite3_result_zeroblob(ctx, n)` | n バイトのゼロ埋め BLOB を返す |
-| `sqlite3_result_value(ctx, sqlite3_value*)` | 入力値をそのまま返す (型を保持) |
-| `sqlite3_result_pointer(ctx, ptr, type, destructor)` | ポインタを受け渡す (SQLite 3.20+) |
-| `sqlite3_result_subtype(ctx, unsigned int)` | JSON 等のサブタイプ情報を付加する |
+| `sqlite3_result_zeroblob(ctx, n)` | Return an n-byte zero-filled BLOB |
+| `sqlite3_result_value(ctx, sqlite3_value*)` | Return the input value as-is (preserving its type) |
+| `sqlite3_result_pointer(ctx, ptr, type, destructor)` | Pass a pointer (SQLite 3.20+) |
+| `sqlite3_result_subtype(ctx, unsigned int)` | Attach subtype information such as JSON |
 
-#### エラーを返す
+#### Returning Errors
 
-| 関数 | 用途 |
+| Function | Usage |
 |---|---|
-| `sqlite3_result_error(ctx, msg, len)` | エラーメッセージを返す |
-| `sqlite3_result_error_nomem(ctx)` | メモリ不足エラーを返す |
-| `sqlite3_result_error_toobig(ctx)` | データが大きすぎるエラーを返す |
-| `sqlite3_result_error_code(ctx, int)` | 任意のエラーコードを返す |
+| `sqlite3_result_error(ctx, msg, len)` | Return an error message |
+| `sqlite3_result_error_nomem(ctx)` | Return an out-of-memory error |
+| `sqlite3_result_error_toobig(ctx)` | Return a data-too-large error |
+| `sqlite3_result_error_code(ctx, int)` | Return an arbitrary error code |
 
-#### destructor 引数
+#### destructor Argument
 
-`_text`, `_blob` 系の最後の引数に渡すメモリ管理の指定:
+Memory management specification passed as the last argument to `_text` and `_blob` functions:
 
-| 値 | 意味 |
+| Value | Meaning |
 |---|---|
-| `SQLITE_STATIC` | データは呼び出し側が管理。SQLite はコピーしない |
-| `SQLITE_TRANSIENT` | SQLite が内部でコピーを作成する。ローカル変数でも安全 |
-| 関数ポインタ (例: `sqlite3_free`) | SQLite が使用後にデストラクタを呼ぶ |
+| `SQLITE_STATIC` | Data is managed by the caller. SQLite does not copy it |
+| `SQLITE_TRANSIENT` | SQLite creates an internal copy. Safe even for local variables |
+| Function pointer (e.g., `sqlite3_free`) | SQLite calls the destructor after use |
 
-### 5.5. メモリ管理
+### 5.5. Memory Management
 
-拡張内では標準の `malloc`/`free` ではなく SQLite 提供の関数を使うことが推奨される:
+Within extensions, it is recommended to use SQLite-provided functions instead of standard `malloc`/`free`:
 
-| 関数 | 説明 |
+| Function | Description |
 |---|---|
-| `sqlite3_malloc(n)` | n バイトのメモリを確保 |
-| `sqlite3_realloc(ptr, n)` | メモリを再確保 |
-| `sqlite3_free(ptr)` | メモリを解放 |
-| `sqlite3_mprintf(fmt, ...)` | printf 形式でメモリ確保付き文字列生成 |
+| `sqlite3_malloc(n)` | Allocate n bytes of memory |
+| `sqlite3_realloc(ptr, n)` | Reallocate memory |
+| `sqlite3_free(ptr)` | Free memory |
+| `sqlite3_mprintf(fmt, ...)` | printf-style string creation with memory allocation |
 
-`sqlite3_result_text` の destructor に `sqlite3_free` を渡すことで、
-SQLite がバッファの解放を管理する:
+By passing `sqlite3_free` as the destructor to `sqlite3_result_text`,
+SQLite manages the deallocation of the buffer:
 
 ```cpp
 auto *result = static_cast<char *>(sqlite3_malloc(len + 1));
-// ... result にデータを書き込む ...
+// ... write data to result ...
 sqlite3_result_text(ctx, result, len, sqlite3_free);
-// → SQLite が result を使い終わったら sqlite3_free(result) を呼ぶ
+// → SQLite will call sqlite3_free(result) when done with result
 ```
 
-### 5.6. 実装テンプレート
+### 5.6. Implementation Template
 
 ```cpp
 static void my_func(sqlite3_context *ctx, int /*argc*/, sqlite3_value **argv) {
-    // 1. NULL チェック
+    // 1. NULL check
     if (sqlite3_value_type(argv[0]) == SQLITE_NULL) {
         sqlite3_result_null(ctx);
         return;
     }
 
-    // 2. 引数の取得
+    // 2. Retrieve arguments
     const char *input = reinterpret_cast<const char *>(sqlite3_value_text(argv[0]));
     int len = static_cast<int>(std::strlen(input));
 
-    // 3. 処理
+    // 3. Processing
     auto *result = static_cast<char *>(sqlite3_malloc(len + 1));
     if (!result) {
         sqlite3_result_error_nomem(ctx);
         return;
     }
-    // ... result を構築 ...
+    // ... build result ...
 
-    // 4. 結果の返却
+    // 4. Return result
     sqlite3_result_text(ctx, result, len, sqlite3_free);
 }
 ```
 
 ---
 
-## 6. SQLite C API リファレンス
+## 6. SQLite C API Reference
 
-### 拡張のロードに関する API
+### Extension Loading API
 
-| 関数 | 説明 |
+| Function | Description |
 |---|---|
-| `sqlite3_enable_load_extension(db, onoff)` | 拡張ロードの有効/無効を切り替える |
-| `sqlite3_load_extension(db, file, proc, errmsg)` | 拡張ライブラリをロードする |
-| `sqlite3_auto_extension(xEntryPoint)` | 新しい DB 接続時に自動ロードする拡張を登録 |
-| `sqlite3_cancel_auto_extension(xEntryPoint)` | 自動ロード登録を解除 |
-| `sqlite3_reset_auto_extension()` | 全自動ロード登録を解除 |
+| `sqlite3_enable_load_extension(db, onoff)` | Enable/disable extension loading |
+| `sqlite3_load_extension(db, file, proc, errmsg)` | Load an extension library |
+| `sqlite3_auto_extension(xEntryPoint)` | Register an extension to auto-load on new DB connections |
+| `sqlite3_cancel_auto_extension(xEntryPoint)` | Unregister an auto-load extension |
+| `sqlite3_reset_auto_extension()` | Unregister all auto-load extensions |
 
-### pApp (ユーザデータ) の活用
+### Using pApp (User Data)
 
-`sqlite3_create_function` の第5引数 `pApp` に任意のポインタを渡せる。
-コールバック内で `sqlite3_user_data(ctx)` を使って取り出す:
+An arbitrary pointer can be passed as the 5th argument `pApp` of `sqlite3_create_function`.
+Retrieve it within the callback using `sqlite3_user_data(ctx)`:
 
 ```cpp
-// 登録時
+// At registration
 int multiplier = 10;
 sqlite3_create_function(db, "scale", 1, SQLITE_UTF8, &multiplier,
                          scale_func, nullptr, nullptr);
 
-// コールバック内
+// Inside the callback
 static void scale_func(sqlite3_context *ctx, int /*argc*/, sqlite3_value **argv) {
     auto *mul = static_cast<int *>(sqlite3_user_data(ctx));
     double x = sqlite3_value_double(argv[0]);
@@ -696,17 +698,17 @@ static void scale_func(sqlite3_context *ctx, int /*argc*/, sqlite3_value **argv)
 }
 ```
 
-### 集約関数の実装
+### Implementing Aggregate Functions
 
-集約関数 (SUM, AVG のような関数) を実装するには `xStep` と `xFinal` を使う。
-本プロジェクトでは、ヒープ上に状態オブジェクトを確保し、`sqlite3_aggregate_context` にはポインタのみを格納するパターンを採用している:
+To implement aggregate functions (like SUM, AVG), use `xStep` and `xFinal`.
+In this project, a pattern is adopted where the state object is allocated on the heap and only a pointer is stored in `sqlite3_aggregate_context`:
 
 ```cpp
 struct SingleColumnState {
     std::vector<double> values;
 };
 
-// xStep: 各行で呼ばれる（NULL 行は無視）
+// xStep: Called for each row (NULL rows are skipped)
 static void xStep(sqlite3_context *ctx, int /*argc*/, sqlite3_value **argv) {
     if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
     auto **pp = static_cast<SingleColumnState**>(
@@ -716,7 +718,7 @@ static void xStep(sqlite3_context *ctx, int /*argc*/, sqlite3_value **argv) {
     if (*pp) (*pp)->values.push_back(sqlite3_value_double(argv[0]));
 }
 
-// xFinal: 最後に1回呼ばれる
+// xFinal: Called once at the end
 static void xFinal(sqlite3_context *ctx) {
     auto **pp = static_cast<SingleColumnState**>(
         sqlite3_aggregate_context(ctx, 0));
@@ -733,7 +735,7 @@ static void xFinal(sqlite3_context *ctx) {
     if (pp && *pp) { delete *pp; *pp = nullptr; }
 }
 
-// 登録 (xFunc = nullptr, xStep と xFinal を指定)
+// Registration (xFunc = nullptr, specify xStep and xFinal)
 sqlite3_create_function_v2(db, "stat_mean", 1,
     SQLITE_UTF8 | SQLITE_DETERMINISTIC,
     nullptr, nullptr, xStep, xFinal, nullptr);
@@ -741,40 +743,40 @@ sqlite3_create_function_v2(db, "stat_mean", 1,
 
 ---
 
-## 7. C++版の実装テクニック
+## 7. C++ Implementation Techniques
 
-### コールバックの3つの記述方式
+### Three Callback Coding Styles
 
-本プロジェクトの `ext_funcs.cpp` では `sqlite3_create_function` に渡すコールバックを3つの方式で記述している:
+In this project's `ext_funcs.cpp`, callbacks passed to `sqlite3_create_function` are written in three styles:
 
-#### 方法1: 通常の static 関数
+#### Method 1: Regular static function
 
 ```cpp
-// 関数定義
+// Function definition
 static void reverse_func(sqlite3_context *ctx, int, sqlite3_value **argv) {
     // ...
 }
 
-// 登録
+// Registration
 sqlite3_create_function(db, "reverse", 1, ..., reverse_func, nullptr, nullptr);
 ```
 
-#### 方法2: auto 変数にラムダを代入
+#### Method 2: Lambda assigned to auto variable
 
 ```cpp
-// ラムダを名前付き変数に格納
+// Store lambda in a named variable
 static auto repeat_func = [](sqlite3_context *ctx, int, sqlite3_value **argv) {
     // ...
 };
 
-// 登録 — + で関数ポインタに変換して渡す
+// Registration — convert to function pointer with + and pass
 sqlite3_create_function(db, "repeat", 2, ..., +repeat_func, nullptr, nullptr);
 ```
 
-#### 方法3: インラインラムダ
+#### Method 3: Inline lambda
 
 ```cpp
-// 登録時に直接記述
+// Write directly at registration
 sqlite3_create_function(db, "is_palindrome", 1, ...,
     +[](sqlite3_context *ctx, int, sqlite3_value **argv) {
         // ...
@@ -782,132 +784,132 @@ sqlite3_create_function(db, "is_palindrome", 1, ...,
     nullptr, nullptr);
 ```
 
-3つの方式はいずれもコンパイル後は同一の関数ポインタになるため、実行時の違いはない。
+All three styles result in identical function pointers after compilation, so there is no runtime difference.
 
-### テンプレートヘルパーによる簡潔な登録
+### Concise Registration with Template Helpers
 
-本プロジェクトでは6種類のテンプレートパターンを使い、統計計算ロジックだけを差し替える設計を採用している。
+This project uses six template patterns, designed so that only the statistical computation logic is swapped out.
 
 ```cpp
-// --- テンプレート A: 基本集約関数 ---
+// --- Template A: Basic aggregate functions ---
 static double calc_mean(const std::vector<double>& v) {
     return statcpp::mean(v.begin(), v.end());
 }
 rc = SingleColumnAggregate<calc_mean>::register_func(db, "stat_mean");
 
-// --- テンプレート B: パラメータ付き集約関数 ---
+// --- Template B: Aggregate functions with parameters ---
 rc = SingleColumnParamAggregate<1, calc_percentile>::register_func(db, "stat_percentile");
 rc = SingleColumnParamAggregateText<1, calc_t_test>::register_func(db, "stat_t_test");
 
-// --- テンプレート C: 2カラム集約関数 ---
+// --- Template C: Two-column aggregate functions ---
 rc = TwoColumnAggregate<calc_pearson_r>::register_func(db, "stat_pearson_r");
 rc = TwoColumnAggregateText<calc_simple_regression>::register_func(db, "stat_simple_regression");
 rc = TwoColumnParamAggregate<1, calc_weighted_percentile>::register_func(db, "stat_weighted_percentile");
 
-// --- テンプレート D: ウィンドウ関数 ---
-rc = FullScanWindowFunction<wf_rolling_mean>::register_func_2(db, "stat_rolling_mean");  // 2引数
-rc = FullScanWindowFunction<wf_rank>::register_func_1(db, "stat_rank");                   // 1引数
+// --- Template D: Window functions ---
+rc = FullScanWindowFunction<wf_rolling_mean>::register_func_2(db, "stat_rolling_mean");  // 2 arguments
+rc = FullScanWindowFunction<wf_rank>::register_func_1(db, "stat_rank");                   // 1 argument
 
-// --- テンプレート E: 複合集約関数 ---
+// --- Template E: Composite aggregate functions ---
 rc = SingleColumnAggregateText<calc_modes>::register_func(db, "stat_modes");
 rc = TwoColumnAggregateText<calc_t_test2>::register_func(db, "stat_t_test2");
 
-// --- テンプレート F: スカラー関数 ---
-rc = register_scalar(db, "stat_normal_pdf", -1, sf_normal_pdf);     // 決定的
-rc = register_scalar_nd(db, "stat_normal_rand", -1, sf_normal_rand); // 非決定的（乱数）
+// --- Template F: Scalar functions ---
+rc = register_scalar(db, "stat_normal_pdf", -1, sf_normal_pdf);     // Deterministic
+rc = register_scalar_nd(db, "stat_normal_rand", -1, sf_normal_rand); // Non-deterministic (random)
 ```
 
-### ラムダ式の仕組み
+### How Lambda Expressions Work
 
 ```cpp
 +[](sqlite3_context *ctx, int, sqlite3_value **argv) { ... }
 ```
 
-- キャプチャなしラムダ (`[]`) は**コンパイル時に**通常の関数ポインタに変換される
-- 先頭の `+` はラムダを関数ポインタへ明示的に変換する慣用句
-- 生成されるコードは `static void func(...)` と**同一**
-- `std::function` は関数ポインタではないため `sqlite3_create_function` に直接渡せない
+- A captureless lambda (`[]`) is converted to a regular function pointer **at compile time**
+- The leading `+` is an idiom for explicitly converting the lambda to a function pointer
+- The generated code is **identical** to `static void func(...)`
+- `std::function` is not a function pointer and therefore cannot be passed directly to `sqlite3_create_function`
 
-### テンプレートの仕組み
+### How Templates Work
 
 ```cpp
 template <double (*Fn)(double)>
 int register_double_func(sqlite3 *db, const char *name) { ... }
 ```
 
-- テンプレートは**コンパイル時に展開**される
-- `Fn(x)` の呼び出しは**インライン化**され、間接呼び出しにはならない
+- Templates are **expanded at compile time**
+- The `Fn(x)` call is **inlined** and does not result in an indirect call
 
-### オーバーロード時の注意
+### Overloading Considerations
 
-同名関数のオーバーロードがある場合、テンプレート引数で曖昧になる:
+When overloads of the same function name exist, the template argument becomes ambiguous:
 
 ```cpp
 static double cube(double x) { return x * x * x; }
 static long   cube(long x)   { return x * x * x; }
 
-// 明示的にキャストしてオーバーロード解決
+// Explicitly cast to resolve overload
 register_double_func<static_cast<double(*)(double)>(cube)>(db, "cube");
 ```
 
-SQLite の値は内部的に動的型なので `double` で統一するのが最もシンプル。
+Since SQLite values are internally dynamically typed, unifying on `double` is the simplest approach.
 
 ---
 
-## 8. ダイナミックライブラリとしての考慮事項
+## 8. Dynamic Library Considerations
 
-### エントリポイントのシンボル
+### Entry Point Symbol
 
-`extern "C"` によりマングリングが抑制され、SQLite が期待するシンボル名がエクスポートされる。
+`extern "C"` suppresses name mangling, exporting the symbol name that SQLite expects.
 
 ```bash
 nm -gU ext_funcs.dylib | grep sqlite3_ext_funcs_init
 # → _sqlite3_ext_funcs_init
 ```
 
-ラムダ・テンプレートは内部リンケージ (`static` 相当) のため `.dylib` の公開シンボルテーブルには現れない。
+Lambdas and templates have internal linkage (equivalent to `static`) and do not appear in the `.dylib` public symbol table.
 
-### C++ ランタイム依存
+### C++ Runtime Dependency
 
 ```bash
 otool -L ext_funcs.dylib
 ```
 
-`std::string`, `std::reverse` 等の使用により `libc++` への動的リンクが追加される。
+Use of `std::string`, `std::reverse`, etc. adds a dynamic link dependency on `libc++`.
 
-### 本プロジェクトでの libc++ ロードコスト
+### libc++ Loading Cost in This Project
 
-本プロジェクトでは `main.cpp` が C++でコンパイル・リンクされるため、
-プロセス起動時に `dyld` が `libc++.1.dylib` を既にロードしている。
+In this project, since `main.cpp` is compiled and linked as C++,
+`dyld` has already loaded `libc++.1.dylib` at process startup.
 
 ```text
-1. main 起動
-   └─ dyld が libc++.1.dylib をロード (main が C++ なので必須)
+1. main starts
+   └─ dyld loads libc++.1.dylib (required because main is C++)
 
-2. sqlite3_load_extension() で ext_funcs.dylib をロード
-   └─ ext_funcs.dylib も libc++ に依存
-   └─ しかし libc++ は既にメモリ上にある
-   └─ → 参照カウントが増えるだけ、再ロードは発生しない
+2. sqlite3_load_extension() loads ext_funcs.dylib
+   └─ ext_funcs.dylib also depends on libc++
+   └─ But libc++ is already in memory
+   └─ → Only the reference count is incremented; no reload occurs
 ```
 
-macOS の `dyld` は同一ライブラリの二重ロードはしない。
-既にマップ済みのアドレスを共有するだけなので、コストはほぼゼロ。
+macOS's `dyld` does not load the same library twice.
+It merely shares the already-mapped address, so the cost is essentially zero.
 
-### libc++ 依存を排除する方法
+### How to Eliminate libc++ Dependency
 
-1. `std::string` を避け、`sqlite3_malloc` + 手書きループを使う
-2. `<algorithm>` のヘッダオンリー関数のみ使用する (インライン展開される)
-3. ビルド時に例外と RTTI を無効化する:
+1. Avoid `std::string` and use `sqlite3_malloc` + hand-written loops instead
+2. Use only header-only functions from `<algorithm>` (they are inlined)
+3. Disable exceptions and RTTI at build time:
 
 ```cmake
 target_compile_options(ext_funcs PRIVATE -fno-exceptions -fno-rtti)
 ```
 
-### 実行時オーバーヘッド
+### Runtime Overhead
 
-| 要素 | オーバーヘッド | 説明 |
+| Element | Overhead | Description |
 |---|---|---|
-| ラムダ → 関数ポインタ | なし | コンパイル時変換 |
-| テンプレート展開 | なし | コンパイル時展開、インライン化 |
-| `extern "C"` | なし | リンケージ指定のみ |
-| `std::string` + `SQLITE_TRANSIENT` | 微小 | コピーが 1回増える (reverse 関数等) |
+| Lambda to function pointer | None | Compile-time conversion |
+| Template expansion | None | Compile-time expansion, inlined |
+| `extern "C"` | None | Linkage specification only |
+| `std::string` + `SQLITE_TRANSIENT` | Minimal | One extra copy (e.g., reverse function) |

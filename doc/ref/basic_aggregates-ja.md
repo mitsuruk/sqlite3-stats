@@ -2,7 +2,7 @@
 
 1カラムの集約関数。`SELECT stat_xxx(column) FROM table` の形式で使用する。`GROUP BY`、`HAVING`、サブクエリなど SQLite3 の標準的な集約関数が使えるすべての文脈で利用可能。
 
-← [関数リファレンス](../関数リファレンス.md) に戻る
+← [関数リファレンス](../function_reference-ja.md) に戻る
 
 ---
 

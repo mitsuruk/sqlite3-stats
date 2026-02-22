@@ -6,7 +6,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 
-[日本語](README.ja.md)
+[日本語](README-ja.md)
 
 ## Overview
 
@@ -139,43 +139,52 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- effect size=0.5, alpha=0.05, power=0.80
 
 ## Function Reference
 
-Full documentation for all 249 functions (in Japanese):
+Full documentation for all 249 functions:
 
-- [Function Reference (hub)](doc/関数リファレンス.md)
-  - [Basic Aggregates (24)](doc/ref/基本集約関数.md)
-  - [Parameterized Aggregates (20)](doc/ref/パラメータ付き集約関数.md)
-  - [Two-Column Aggregates (27)](doc/ref/2カラム集約関数.md)
-  - [Window Functions (23)](doc/ref/ウィンドウ関数.md)
-  - [Complex Aggregates (32)](doc/ref/複合集約関数.md)
-  - [Scalar — Tests/Helpers (40)](doc/ref/スカラー関数_検定補助.md)
-  - [Scalar — Distributions/Transforms (83)](doc/ref/スカラー関数_分布変換.md)
+- [Function Reference (hub)](doc/function_reference.md)
+  - [Basic Aggregates (24)](doc/ref/basic_aggregates.md)
+  - [Parameterized Aggregates (20)](doc/ref/parameterized_aggregates.md)
+  - [Two-Column Aggregates (27)](doc/ref/two_column_aggregates.md)
+  - [Window Functions (23)](doc/ref/window_functions.md)
+  - [Complex Aggregates (32)](doc/ref/complex_aggregates.md)
+  - [Scalar — Tests/Helpers (40)](doc/ref/scalar_tests_helpers.md)
+  - [Scalar — Distributions/Transforms (83)](doc/ref/scalar_distributions.md)
 
 ## Project Structure
 
 ```text
 sqlite3StatisticalLibrary/
 ├── CMakeLists.txt
-├── README.md                          # This file
-├── README.ja.md                       # Japanese README (statcpp library)
+├── README.md                              # This file (English)
+├── README-ja.md                           # Japanese README
 ├── src/
-│   ├── ext_funcs.cpp                  # Extension: 249 SQL functions
-│   ├── main.cpp                       # Test runner (266 tests)
-│   └── include/                       # Local headers
+│   ├── ext_funcs.cpp                      # Extension: 249 SQL functions
+│   ├── main.cpp                           # Test runner (266 tests)
+│   └── include/                           # Local headers
 ├── doc/
-│   ├── 関数リファレンス.md              # Function reference (hub)
-│   ├── sqlite3lib_LOAD_EXTENSION.md   # Extension implementation guide
-│   └── ref/                           # Per-category function details
-│       ├── 基本集約関数.md
-│       ├── パラメータ付き集約関数.md
-│       ├── 2カラム集約関数.md
-│       ├── ウィンドウ関数.md
-│       ├── 複合集約関数.md
-│       ├── スカラー関数_検定補助.md
-│       └── スカラー関数_分布変換.md
+│   ├── function_reference.md              # Function reference hub (English)
+│   ├── function_reference-ja.md           # Function reference hub (Japanese)
+│   ├── sqlite3lib_LOAD_EXTENSION.md       # Extension implementation guide (English)
+│   ├── sqlite3lib_LOAD_EXTENSION-ja.md    # Extension implementation guide (Japanese)
+│   └── ref/                               # Per-category function details
+│       ├── basic_aggregates.md            # English
+│       ├── basic_aggregates-ja.md         # Japanese
+│       ├── parameterized_aggregates.md
+│       ├── parameterized_aggregates-ja.md
+│       ├── two_column_aggregates.md
+│       ├── two_column_aggregates-ja.md
+│       ├── window_functions.md
+│       ├── window_functions-ja.md
+│       ├── complex_aggregates.md
+│       ├── complex_aggregates-ja.md
+│       ├── scalar_tests_helpers.md
+│       ├── scalar_tests_helpers-ja.md
+│       ├── scalar_distributions.md
+│       └── scalar_distributions-ja.md
 ├── cmake/
-│   ├── sqlite3.cmake                  # SQLite3 auto-download
-│   └── statcpp.cmake                  # statcpp auto-download
-└── download/                          # Auto-downloaded dependencies
+│   ├── sqlite3.cmake                      # SQLite3 auto-download
+│   └── statcpp.cmake                      # statcpp auto-download
+└── download/                              # Auto-downloaded dependencies
     ├── sqlite3/
     └── statcpp/
 ```

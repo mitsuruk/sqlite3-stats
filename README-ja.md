@@ -141,41 +141,50 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- 効果量=0.5, alpha=0.05, 検出力=0.80
 
 全 249 関数の詳細ドキュメント:
 
-- [関数リファレンス（ハブ）](doc/関数リファレンス.md)
-  - [基本集約関数（24）](doc/ref/基本集約関数.md)
-  - [パラメータ付き集約関数（20）](doc/ref/パラメータ付き集約関数.md)
-  - [2 カラム集約関数（27）](doc/ref/2カラム集約関数.md)
-  - [ウィンドウ関数（23）](doc/ref/ウィンドウ関数.md)
-  - [複合集約関数（32）](doc/ref/複合集約関数.md)
-  - [スカラー関数 — 検定・補助（40）](doc/ref/スカラー関数_検定補助.md)
-  - [スカラー関数 — 分布・変換（83）](doc/ref/スカラー関数_分布変換.md)
+- [関数リファレンス（ハブ）](doc/function_reference-ja.md)
+  - [基本集約関数（24）](doc/ref/basic_aggregates-ja.md)
+  - [パラメータ付き集約関数（20）](doc/ref/parameterized_aggregates-ja.md)
+  - [2 カラム集約関数（27）](doc/ref/two_column_aggregates-ja.md)
+  - [ウィンドウ関数（23）](doc/ref/window_functions-ja.md)
+  - [複合集約関数（32）](doc/ref/complex_aggregates-ja.md)
+  - [スカラー関数 — 検定・補助（40）](doc/ref/scalar_tests_helpers-ja.md)
+  - [スカラー関数 — 分布・変換（83）](doc/ref/scalar_distributions-ja.md)
 
 ## プロジェクト構成
 
 ```text
 sqlite3StatisticalLibrary/
 ├── CMakeLists.txt
-├── README.md                          # 英語版 README
-├── README.ja.md                       # このファイル（日本語版）
+├── README.md                              # 英語版 README
+├── README-ja.md                           # このファイル（日本語版）
 ├── src/
-│   ├── ext_funcs.cpp                  # 拡張機能: 249 個の SQL 関数
-│   ├── main.cpp                       # テストランナー（266 テスト）
-│   └── include/                       # ローカルヘッダー
+│   ├── ext_funcs.cpp                      # 拡張機能: 249 個の SQL 関数
+│   ├── main.cpp                           # テストランナー（266 テスト）
+│   └── include/                           # ローカルヘッダー
 ├── doc/
-│   ├── 関数リファレンス.md              # 関数リファレンス（ハブ）
-│   ├── sqlite3lib_LOAD_EXTENSION.md   # 拡張機能の実装ガイド
-│   └── ref/                           # カテゴリ別の関数詳細
-│       ├── 基本集約関数.md
-│       ├── パラメータ付き集約関数.md
-│       ├── 2カラム集約関数.md
-│       ├── ウィンドウ関数.md
-│       ├── 複合集約関数.md
-│       ├── スカラー関数_検定補助.md
-│       └── スカラー関数_分布変換.md
+│   ├── function_reference.md              # 関数リファレンス（英語版）
+│   ├── function_reference-ja.md           # 関数リファレンス（日本語版）
+│   ├── sqlite3lib_LOAD_EXTENSION.md       # 拡張機能の実装ガイド（英語版）
+│   ├── sqlite3lib_LOAD_EXTENSION-ja.md    # 拡張機能の実装ガイド（日本語版）
+│   └── ref/                               # カテゴリ別の関数詳細
+│       ├── basic_aggregates.md            # 英語版
+│       ├── basic_aggregates-ja.md         # 日本語版
+│       ├── parameterized_aggregates.md
+│       ├── parameterized_aggregates-ja.md
+│       ├── two_column_aggregates.md
+│       ├── two_column_aggregates-ja.md
+│       ├── window_functions.md
+│       ├── window_functions-ja.md
+│       ├── complex_aggregates.md
+│       ├── complex_aggregates-ja.md
+│       ├── scalar_tests_helpers.md
+│       ├── scalar_tests_helpers-ja.md
+│       ├── scalar_distributions.md
+│       └── scalar_distributions-ja.md
 ├── cmake/
-│   ├── sqlite3.cmake                  # SQLite3 自動ダウンロード
-│   └── statcpp.cmake                  # statcpp 自動ダウンロード
-└── download/                          # 自動ダウンロードされた依存関係
+│   ├── sqlite3.cmake                      # SQLite3 自動ダウンロード
+│   └── statcpp.cmake                      # statcpp 自動ダウンロード
+└── download/                              # 自動ダウンロードされた依存関係
     ├── sqlite3/
     └── statcpp/
 ```
