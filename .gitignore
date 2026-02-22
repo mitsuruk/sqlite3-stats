@@ -1,0 +1,83 @@
+# VSCode
+**/.vscode/
+**/.cache/
+**/.cmake/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# CMake
+**/build/
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+
+# logs
+*.log
+*.logs
+*.LOG
+*.LOGS
+
+# Backup files
+*.bak
+*.BAK
+*~
+*.swp
+*.swo
+
+# clangd related
+compile_commands.json
+
+# Python related (including VSCode extensions)
+**/__pycache__/
+**/*.py[cod]
+**/*.ipynb_checkpoints/
+
+# Object files, etc.
+*.dSYM/
+*.o
+*.a
+*.so
+*.dylib
+
+# Xcode (macOS environment)
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+
+# Other IDEs
+.idea/
+.cache/
+
+# Downloaded dependencies
+**/download/
+
+# ctags/tags related
+tags
+TAGS
