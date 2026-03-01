@@ -330,7 +330,7 @@ FROM data;
 
 ### stat_ks_test
 
-**Kolmogorov-Smirnov 検定**（正規性検定）を実行する。データが正規分布に従うかを検定する。
+**Lilliefors 検定**（正規性検定）を実行する。データが正規分布に従うかを検定する。平均と分散をデータから推定するため、既知パラメータの標準 KS 検定ではなく Lilliefors 検定となる。
 
 **構文**: `stat_ks_test(column)`
 
@@ -339,17 +339,17 @@ FROM data;
 > **最小データ数**: 2
 
 ```sql
--- 正規性の KS 検定
+-- 正規性の Lilliefors 検定
 SELECT stat_ks_test(response_time) AS ks_result FROM api_logs;
 
--- Shapiro-Wilk と KS の比較
+-- Shapiro-Wilk と Lilliefors の比較
 SELECT stat_shapiro_wilk(val) AS shapiro_wilk,
-       stat_ks_test(val)      AS ks_test
+       stat_ks_test(val)      AS lilliefors
 FROM data;
 -- 一般に Shapiro-Wilk のほうが検出力が高い
 
 -- 大量データに対する正規性検定
--- KS 検定は大標本でも使いやすい
+-- Lilliefors 検定は大標本でも使いやすい
 SELECT stat_ks_test(measurement) AS normality
 FROM sensor_data
 WHERE sensor_id = 'A001';

@@ -491,7 +491,7 @@ static std::string calc_shapiro_wilk(const std::vector<double>& v,
 static std::string calc_ks_test(const std::vector<double>& v,
                                  const std::array<double, 0>&) {
     if (v.size() < 2) return "";
-    auto r = statcpp::ks_test_normal(v.begin(), v.end());
+    auto r = statcpp::lilliefors_test(v.begin(), v.end());
     return json_test_result(r);
 }
 
@@ -566,7 +566,7 @@ static double calc_biweight_midvar(const std::vector<double>& v,
 static std::string calc_bootstrap_mean(const std::vector<double>& v,
                                         const std::array<double, 1>& p) {
     auto n = static_cast<std::size_t>(p[0]);
-    if (n == 0) n = 1000;
+    if (n < 2) n = 1000;
     auto r = statcpp::bootstrap_mean(v.begin(), v.end(), n);
     return json_bootstrap(r);
 }
@@ -574,7 +574,7 @@ static std::string calc_bootstrap_mean(const std::vector<double>& v,
 static std::string calc_bootstrap_median(const std::vector<double>& v,
                                           const std::array<double, 1>& p) {
     auto n = static_cast<std::size_t>(p[0]);
-    if (n == 0) n = 1000;
+    if (n < 2) n = 1000;
     auto r = statcpp::bootstrap_median(v.begin(), v.end(), n);
     return json_bootstrap(r);
 }
@@ -583,7 +583,7 @@ static std::string calc_bootstrap_stddev(const std::vector<double>& v,
                                           const std::array<double, 1>& p) {
     if (v.size() < 2) return "";
     auto n = static_cast<std::size_t>(p[0]);
-    if (n == 0) n = 1000;
+    if (n < 2) n = 1000;
     auto r = statcpp::bootstrap_stddev(v.begin(), v.end(), n);
     return json_bootstrap(r);
 }
@@ -1898,7 +1898,7 @@ static std::string calc_nelson_aalen(const std::vector<double>& times,
 static std::string calc_bootstrap_generic(const std::vector<double>& v,
                                            const std::array<double, 1>& p) {
     auto n = static_cast<std::size_t>(p[0]);
-    if (n == 0) n = 1000;
+    if (n < 2) n = 1000;
     auto stat_func = [](auto f, auto l) { return statcpp::mean(f, l); };
     auto r = statcpp::bootstrap(v.begin(), v.end(), stat_func, n);
     return json_bootstrap(r);
@@ -1909,7 +1909,7 @@ static std::string calc_bootstrap_bca(const std::vector<double>& v,
                                        const std::array<double, 1>& p) {
     if (v.size() < 3) return "";
     auto n = static_cast<std::size_t>(p[0]);
-    if (n == 0) n = 1000;
+    if (n < 2) n = 1000;
     auto stat_func = [](auto f, auto l) { return statcpp::mean(f, l); };
     auto r = statcpp::bootstrap_bca(v.begin(), v.end(), stat_func, n);
     return json_bootstrap(r);

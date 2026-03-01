@@ -132,7 +132,7 @@ sqlite3StatisticalLibrary/
 | `stat_t_test(col, mu0)` | 数値, 数値 | JSON | 1標本 t 検定 |
 | `stat_chisq_gof_uniform(col)` | 数値 1 | JSON | カイ二乗適合度検定（均等） |
 | `stat_shapiro_wilk(col)` | 数値 1 | JSON | Shapiro-Wilk 検定 |
-| `stat_ks_test(col)` | 数値 1 | JSON | KS 検定（正規性） |
+| `stat_ks_test(col)` | 数値 1 | JSON | Lilliefors 検定（正規性） |
 | `stat_wilcoxon(col, mu0)` | 数値, 数値 | JSON | Wilcoxon 符号付順位検定 |
 | `stat_ci_mean(col, confidence)` | 数値, 数値 | JSON | 平均の信頼区間（t 分布） |
 | `stat_ci_mean_z(col, sigma, confidence)` | 数値, 数値, 数値 | JSON | 平均の信頼区間（z 分布） |

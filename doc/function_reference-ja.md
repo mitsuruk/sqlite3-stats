@@ -141,7 +141,7 @@ GROUP BY category;
 | `stat_t_test(col, mu0)` | 1標本 t 検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_t_test) |
 | `stat_chisq_gof_uniform(col)` | カイ二乗適合度検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_chisq_gof_uniform) |
 | `stat_shapiro_wilk(col)` | Shapiro-Wilk 検定 | JSON | 3 | [詳細](ref/parameterized_aggregates-ja.md#stat_shapiro_wilk) |
-| `stat_ks_test(col)` | KS 検定（正規性） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ks_test) |
+| `stat_ks_test(col)` | Lilliefors 検定（正規性） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ks_test) |
 | `stat_wilcoxon(col, mu0)` | Wilcoxon 符号付順位検定 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_wilcoxon) |
 | `stat_ci_mean(col, confidence)` | 平均の信頼区間（t） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean) |
 | `stat_ci_mean_z(col, sigma, confidence)` | 平均の信頼区間（z） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean_z) |

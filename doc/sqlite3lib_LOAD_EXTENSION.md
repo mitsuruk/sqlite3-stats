@@ -134,7 +134,7 @@ delegating the statistical computation logic to statcpp.
 | `stat_t_test(col, mu0)` | numeric, numeric | JSON | One-sample t-test |
 | `stat_chisq_gof_uniform(col)` | numeric x1 | JSON | Chi-squared goodness-of-fit test (uniform) |
 | `stat_shapiro_wilk(col)` | numeric x1 | JSON | Shapiro-Wilk test |
-| `stat_ks_test(col)` | numeric x1 | JSON | KS test (normality) |
+| `stat_ks_test(col)` | numeric x1 | JSON | Lilliefors test (normality) |
 | `stat_wilcoxon(col, mu0)` | numeric, numeric | JSON | Wilcoxon signed-rank test |
 | `stat_ci_mean(col, confidence)` | numeric, numeric | JSON | Confidence interval for the mean (t-distribution) |
 | `stat_ci_mean_z(col, sigma, confidence)` | numeric, numeric, numeric | JSON | Confidence interval for the mean (z-distribution) |

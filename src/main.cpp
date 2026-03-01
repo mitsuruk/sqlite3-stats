@@ -375,7 +375,7 @@ int main() {
 
     exec_sql(db,
         "SELECT stat_ks_test(val) AS result FROM data;",
-        "\n[42] stat_ks_test — expected: JSON (KS test for normality)");
+        "\n[42] stat_ks_test — expected: JSON (Lilliefors test for normality)");
 
     // Wilcoxon: H0: median=5.5 (data median IS 5.5)
     exec_sql(db,

@@ -330,7 +330,7 @@ FROM data;
 
 ### stat_ks_test
 
-Performs the **Kolmogorov-Smirnov test** (normality test). Tests whether data follow a normal distribution.
+Performs the **Lilliefors test** (normality test). Tests whether data follow a normal distribution. This is a Lilliefors test (not a standard KS test) because the mean and variance are estimated from the data.
 
 **Syntax**: `stat_ks_test(column)`
 
@@ -339,17 +339,17 @@ Performs the **Kolmogorov-Smirnov test** (normality test). Tests whether data fo
 > **Minimum data count**: 2
 
 ```sql
--- KS normality test
+-- Lilliefors normality test
 SELECT stat_ks_test(response_time) AS ks_result FROM api_logs;
 
--- Comparison of Shapiro-Wilk and KS
+-- Comparison of Shapiro-Wilk and Lilliefors
 SELECT stat_shapiro_wilk(val) AS shapiro_wilk,
-       stat_ks_test(val)      AS ks_test
+       stat_ks_test(val)      AS lilliefors
 FROM data;
 -- In general, Shapiro-Wilk has higher statistical power
 
 -- Normality test for large datasets
--- The KS test is convenient even for large samples
+-- The Lilliefors test is convenient even for large samples
 SELECT stat_ks_test(measurement) AS normality
 FROM sensor_data
 WHERE sensor_id = 'A001';

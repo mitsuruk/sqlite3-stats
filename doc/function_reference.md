@@ -143,7 +143,7 @@ GROUP BY category;
 | `stat_t_test(col, mu0)` | One-sample t-test | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_t_test) |
 | `stat_chisq_gof_uniform(col)` | Chi-square goodness-of-fit test | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_chisq_gof_uniform) |
 | `stat_shapiro_wilk(col)` | Shapiro-Wilk test | JSON | 3 | [Details](ref/parameterized_aggregates.md#stat_shapiro_wilk) |
-| `stat_ks_test(col)` | KS test (normality) | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_ks_test) |
+| `stat_ks_test(col)` | Lilliefors test (normality) | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_ks_test) |
 | `stat_wilcoxon(col, mu0)` | Wilcoxon signed-rank test | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_wilcoxon) |
 | `stat_ci_mean(col, confidence)` | Confidence interval for the mean (t) | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_ci_mean) |
 | `stat_ci_mean_z(col, sigma, confidence)` | Confidence interval for the mean (z) | JSON | 2 | [Details](ref/parameterized_aggregates.md#stat_ci_mean_z) |
