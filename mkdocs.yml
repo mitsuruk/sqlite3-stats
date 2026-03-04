@@ -1,0 +1,47 @@
+site_name: sqlite3StatisticalLibrary
+site_description: A loadable extension that adds 249 statistical functions to SQLite3
+site_url: https://mitsuruk.github.io/sqlite3-stats/
+
+docs_dir: doc
+
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: indigo
+    accent: indigo
+  features:
+    - navigation.sections
+    - navigation.expand
+    - content.code.copy
+
+nav:
+  - English:
+      - Function Reference: function_reference.md
+      - Load Extension Guide: sqlite3lib_LOAD_EXTENSION.md
+      - Changelog: CHANGELOG.md
+      - Detailed Reference:
+          - Basic Aggregates: ref/basic_aggregates.md
+          - Parameterized Aggregates: ref/parameterized_aggregates.md
+          - Two-Column Aggregates: ref/two_column_aggregates.md
+          - Window Functions: ref/window_functions.md
+          - Complex Aggregates: ref/complex_aggregates.md
+          - Scalar Tests & Helpers: ref/scalar_tests_helpers.md
+          - Scalar Distributions: ref/scalar_distributions.md
+  - 日本語:
+      - 関数リファレンス: function_reference-ja.md
+      - 拡張機能ロードガイド: sqlite3lib_LOAD_EXTENSION-ja.md
+      - 変更履歴: CHANGELOG.md
+      - 詳細リファレンス:
+          - 基本集約関数: ref/basic_aggregates-ja.md
+          - パラメータ付き集約関数: ref/parameterized_aggregates-ja.md
+          - 2カラム集約関数: ref/two_column_aggregates-ja.md
+          - ウィンドウ関数: ref/window_functions-ja.md
+          - 複合集約関数: ref/complex_aggregates-ja.md
+          - スカラー関数 (検定・補助): ref/scalar_tests_helpers-ja.md
+          - スカラー関数 (分布): ref/scalar_distributions-ja.md
+
+markdown_extensions:
+  - tables
+  - fenced_code
+  - codehilite
