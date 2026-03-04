@@ -16,6 +16,7 @@ theme:
     - content.code.copy
 
 nav:
+  - Home: index.md
   - English:
       - Function Reference: function_reference.md
       - Load Extension Guide: sqlite3lib_LOAD_EXTENSION.md
