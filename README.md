@@ -13,7 +13,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 
 ## Overview
 
-sqlite3StatisticalLibrary is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 524 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
+sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 524 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
 All 249 functions are verified by 266 integration tests.
 
@@ -50,8 +50,8 @@ All 249 functions are verified by 266 integration tests.
 ### Build
 
 ```bash
-git clone https://github.com/mitsuruk/sqlite3StatisticalLibrary.git
-cd sqlite3StatisticalLibrary
+git clone https://github.com/mitsuruk/sqlite3-stats.git
+cd sqlite3-stats
 mkdir build && cd build
 cmake ..
 make
@@ -156,7 +156,7 @@ Full documentation for all 249 functions:
 ## Project Structure
 
 ```text
-sqlite3StatisticalLibrary/
+sqlite3-stats/
 ├── CMakeLists.txt
 ├── README.md                              # This file (English)
 ├── README-ja.md                           # Japanese README
@@ -191,6 +191,18 @@ sqlite3StatisticalLibrary/
     ├── sqlite3/
     └── statcpp/
 ```
+
+## Related Projects
+
+sqlite3-stats is part of the **statcpp family**. Choose the one that fits your use case:
+
+| Use case | Repository | Description |
+| --- | --- | --- |
+| C++ library | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 header-only statistics library (524 functions) |
+| UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | Command-line interface for UNIX pipelines |
+| SQL (SQLite3) | **sqlite3-stats** (this repo) | SQLite3 loadable extension (249 functions) |
+
+**Required statcpp version**: v0.1.0 or later
 
 ## Tested Environments
 

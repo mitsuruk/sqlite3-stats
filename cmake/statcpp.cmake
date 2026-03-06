@@ -28,8 +28,8 @@ message(STATUS "statcpp configuration:")
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
 set(STATCPP_VERSION "0.1.0")
-set(STATCPP_BRANCH "main")
-set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/heads/${STATCPP_BRANCH}.tar.gz")
+set(STATCPP_TAG "v${STATCPP_VERSION}")
+set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 
 message(STATUS "STATCPP_INSTALL_DIR = ${STATCPP_INSTALL_DIR}")
 
@@ -43,13 +43,13 @@ else()
     file(MAKE_DIRECTORY ${STATCPP_INSTALL_DIR}/include)
 
     # Check if archive is already cached in download/
-    set(STATCPP_CACHED_ARCHIVE ${STATCPP_DOWNLOAD_DIR}/statcpp-${STATCPP_BRANCH}.tar.gz)
+    set(STATCPP_CACHED_ARCHIVE ${STATCPP_DOWNLOAD_DIR}/statcpp-${STATCPP_TAG}.tar.gz)
 
     if(EXISTS ${STATCPP_CACHED_ARCHIVE})
         message(STATUS "statcpp archive already cached: ${STATCPP_CACHED_ARCHIVE}")
     else()
         file(MAKE_DIRECTORY ${STATCPP_DOWNLOAD_DIR})
-        message(STATUS "Downloading statcpp (${STATCPP_BRANCH}) from GitHub ...")
+        message(STATUS "Downloading statcpp (${STATCPP_TAG}) from GitHub ...")
         file(DOWNLOAD
             ${STATCPP_URL}
             ${STATCPP_CACHED_ARCHIVE}
@@ -65,7 +65,7 @@ else()
             message(FATAL_ERROR
                 "statcpp download failed: ${DOWNLOAD_ERROR}\n"
                 "You can manually download and place the file:\n"
-                "  curl -L -o download/statcpp/statcpp-${STATCPP_BRANCH}.tar.gz ${STATCPP_URL}\n"
+                "  curl -L -o download/statcpp/statcpp-${STATCPP_TAG}.tar.gz ${STATCPP_URL}\n"
                 "Then re-run cmake."
             )
         endif()
