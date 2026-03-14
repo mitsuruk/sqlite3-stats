@@ -1,0 +1,120 @@
+# VSCode
+**/.vscode/
+**/.cache/
+**/.cmake/
+*.code-workspace
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+Icon
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+.VolumeIcon.icns
+.com.apple.timemachine.donotpresent
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# CMake
+**/build/
+**/build-ja/
+CMakeLists.txt.user
+CMakeCache.txt
+CMakeFiles
+CMakeScripts
+Testing
+Makefile
+cmake_install.cmake
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps
+CMakeUserPresets.json
+
+# logs
+*.log
+*.logs
+*.LOG
+*.LOGS
+
+# Backup files
+*.bak
+*.BAK
+*~
+*.swp
+*.swo
+
+# Downloaded dependencies
+**/download/
+
+# Python related (including VSCode extensions)
+**/__pycache__/
+**/*.py[cod]
+**/*.ipynb_checkpoints/
+
+# R
+.RData
+.Rhistory
+
+# Object files and binaries
+*.dSYM/
+*.o
+*.a
+*.so
+*.dylib
+*.out
+*.dll
+*.exe
+
+# Coverage
+*.gcda
+*.gcno
+
+# Xcode (macOS environment)
+*.xcuserstate
+*.xcworkspace
+*.xcodeproj
+
+# Other IDEs
+.idea/
+
+# Doxygen output
+doc/
+
+# MkDocs output
+site/
+
+# ctags/tags related
+tags
+TAGS
+
+# Secrets and credentials
+*.pem
+*.key
+*.p12
+*.pfx
+*.crt
+*.cer
+*.token
+*.secret
+*.keystore
+*.jks
+.env
+.env.*
+credentials.json
+id_rsa
+id_ed25519
+id_ecdsa
+.aws/
+gcloud/
+
+# Misc
+.markdownlint.json
