@@ -116,5 +116,9 @@ id_ecdsa
 .aws/
 gcloud/
 
+# Claude Code MCP
+.mcp.json
+data/
+
 # Misc
 .markdownlint.json
