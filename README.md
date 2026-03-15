@@ -8,6 +8,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
+[![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [日本語](README-ja.md)
 
@@ -15,7 +16,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 
 sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 524 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
-All 249 functions are verified by 266 integration tests.
+All 249 functions are verified by 266 integration tests and 388 Google Test automated tests.
 
 ### Key Features
 
@@ -68,6 +69,35 @@ This produces:
 ./a.out
 # [OK] All tests completed (266 tests).
 ```
+
+#### Google Test Suite
+
+Requires [Google Test](https://github.com/google/googletest) (`brew install googletest` on macOS).
+
+```bash
+cmake -S . -B build -DSTAT_TESTS=true -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+
+# Run via CTest
+ctest --test-dir build --output-on-failure
+
+# Run the Google Test executable directly
+./build/stat_tests
+
+# Run a specific test suite
+./build/stat_tests --gtest_filter="BasicAggregates.*"
+```
+
+| Test file | Functions | Tests |
+|---|---|---|
+| basic_aggregates_test.cpp | 24 | 55 |
+| parameterized_aggregates_test.cpp | 20 | 46 |
+| two_column_aggregates_test.cpp | 27 | 57 |
+| window_functions_test.cpp | 23 | 41 |
+| complex_aggregates_test.cpp | 32 | 63 |
+| scalar_tests_helpers_test.cpp | 40 | 43 |
+| scalar_distributions_test.cpp | 83 | 83 |
+| **Total** | **249** | **388** |
 
 ### Load the Extension
 
@@ -160,9 +190,18 @@ sqlite3-stats/
 ├── CMakeLists.txt
 ├── README.md                              # This file (English)
 ├── README-ja.md                           # Japanese README
+├── tests/
+│   ├── test_helpers.hpp                   # Google Test fixture & helpers
+│   ├── basic_aggregates_test.cpp          # 24 functions, 55 tests
+│   ├── parameterized_aggregates_test.cpp  # 20 functions, 46 tests
+│   ├── two_column_aggregates_test.cpp     # 27 functions, 57 tests
+│   ├── window_functions_test.cpp          # 23 functions, 41 tests
+│   ├── complex_aggregates_test.cpp        # 32 functions, 63 tests
+│   ├── scalar_tests_helpers_test.cpp      # 40 functions, 43 tests
+│   └── scalar_distributions_test.cpp      # 83 functions, 83 tests
 ├── src/
 │   ├── ext_funcs.cpp                      # Extension: 249 SQL functions
-│   ├── main.cpp                           # Test runner (266 tests)
+│   ├── main.cpp                           # Legacy test runner (266 tests)
 │   └── include/                           # Local headers
 ├── doc/
 │   ├── function_reference.md              # Function reference hub (English)

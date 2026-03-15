@@ -8,6 +8,7 @@ SQLite3 に **249 個の統計関数** を追加するロード可能な拡張�
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
+[![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [English](README.md)
 
@@ -15,7 +16,7 @@ SQLite3 に **249 個の統計関数** を追加するロード可能な拡張�
 
 sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 249 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（524 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
 
-全 249 関数は 266 件の結合テストで検証済みです。
+全 249 関数は 266 件の結合テストおよび 388 件の Google Test 自動テストで検証済みです。
 
 ### 主な特徴
 
@@ -68,6 +69,35 @@ make
 ./a.out
 # [OK] All tests completed (266 tests).
 ```
+
+#### Google Test スイート
+
+[Google Test](https://github.com/google/googletest) が必要です（macOS: `brew install googletest`）。
+
+```bash
+cmake -S . -B build -DSTAT_TESTS=true -DCMAKE_BUILD_TYPE=Debug
+cmake --build build
+
+# CTest 経由で実行
+ctest --test-dir build --output-on-failure
+
+# Google Test 実行ファイルを直接実行
+./build/stat_tests
+
+# 特定のテストスイートのみ実行
+./build/stat_tests --gtest_filter="BasicAggregates.*"
+```
+
+| テストファイル | 関数数 | テスト数 |
+|---|---|---|
+| basic_aggregates_test.cpp | 24 | 55 |
+| parameterized_aggregates_test.cpp | 20 | 46 |
+| two_column_aggregates_test.cpp | 27 | 57 |
+| window_functions_test.cpp | 23 | 41 |
+| complex_aggregates_test.cpp | 32 | 63 |
+| scalar_tests_helpers_test.cpp | 40 | 43 |
+| scalar_distributions_test.cpp | 83 | 83 |
+| **合計** | **249** | **388** |
 
 ### 拡張機能のロード
 
@@ -160,9 +190,18 @@ sqlite3-stats/
 ├── CMakeLists.txt
 ├── README.md                              # 英語版 README
 ├── README-ja.md                           # このファイル（日本語版）
+├── tests/
+│   ├── test_helpers.hpp                   # Google Test フィクスチャ・ヘルパー
+│   ├── basic_aggregates_test.cpp          # 24 関数, 55 テスト
+│   ├── parameterized_aggregates_test.cpp  # 20 関数, 46 テスト
+│   ├── two_column_aggregates_test.cpp     # 27 関数, 57 テスト
+│   ├── window_functions_test.cpp          # 23 関数, 41 テスト
+│   ├── complex_aggregates_test.cpp        # 32 関数, 63 テスト
+│   ├── scalar_tests_helpers_test.cpp      # 40 関数, 43 テスト
+│   └── scalar_distributions_test.cpp      # 83 関数, 83 テスト
 ├── src/
 │   ├── ext_funcs.cpp                      # 拡張機能: 249 個の SQL 関数
-│   ├── main.cpp                           # テストランナー（266 テスト）
+│   ├── main.cpp                           # レガシーテストランナー（266 テスト）
 │   └── include/                           # ローカルヘッダー
 ├── doc/
 │   ├── function_reference.md              # 関数リファレンス（英語版）

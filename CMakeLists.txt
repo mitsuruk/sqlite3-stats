@@ -587,3 +587,49 @@ target_compile_definitions(${PROJECT_NAME} PRIVATE
 
 # Build the extension library before the main executable
 add_dependencies(${PROJECT_NAME} ext_funcs)
+
+# ----------------------------
+# Google Test for statistical functions (SQL-based)
+# ----------------------------
+if(STAT_TESTS)
+    find_package(GTest REQUIRED)
+    enable_testing()
+
+    set(STAT_TEST_SOURCES
+        ${PROJECT_SOURCE_DIR}/tests/basic_aggregates_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/parameterized_aggregates_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/two_column_aggregates_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/window_functions_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/complex_aggregates_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/scalar_tests_helpers_test.cpp
+        ${PROJECT_SOURCE_DIR}/tests/scalar_distributions_test.cpp
+    )
+
+    add_executable(stat_tests ${STAT_TEST_SOURCES})
+    target_compile_features(stat_tests PRIVATE cxx_std_17)
+    target_include_directories(stat_tests PRIVATE
+        ${PROJECT_SOURCE_DIR}/tests
+        ${SQLITE3_INCLUDE_DIR}
+    )
+    target_link_libraries(stat_tests PRIVATE
+        sqlite3
+        GTest::gmock
+        GTest::gmock_main
+    )
+    target_compile_definitions(stat_tests PRIVATE
+        EXT_FUNCS_PATH="${BINARY_OUTPUT_DIR}/ext_funcs$<IF:$<PLATFORM_ID:Darwin>,.dylib,$<IF:$<PLATFORM_ID:Windows>,.dll,.so>>"
+    )
+    target_compile_options(stat_tests PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+
+    add_dependencies(stat_tests ext_funcs)
+
+    add_test(
+        NAME stat_function_tests
+        COMMAND stat_tests
+        WORKING_DIRECTORY ${BINARY_OUTPUT_DIR}
+    )
+    set_tests_properties(stat_function_tests PROPERTIES
+        TIMEOUT 120
+        ENVIRONMENT "GTEST_COLOR=1"
+    )
+endif()
