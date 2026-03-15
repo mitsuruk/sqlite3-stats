@@ -86,9 +86,6 @@ CMakeUserPresets.json
 # Other IDEs
 .idea/
 
-# Doxygen output
-doc/
-
 # MkDocs output
 site/
 
