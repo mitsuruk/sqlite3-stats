@@ -134,7 +134,8 @@ target_compile_definitions(sqlite3 PUBLIC
 )
 
 target_compile_options(sqlite3 PRIVATE
-    -O2
+    $<$<CXX_COMPILER_ID:MSVC>:/O2>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-O2>
 )
 
 # Link to the main target

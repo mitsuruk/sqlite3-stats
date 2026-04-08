@@ -4,6 +4,24 @@ This document records the change history of sqlite3StatisticalLibrary.
 
 This project follows [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Windows (MSVC) support**: The extension now builds and runs on Windows with MSVC (Visual Studio 2022+).
+  - `ext_funcs.dll` is produced on Windows alongside `.dylib` (macOS) and `.so` (Linux).
+  - `__declspec(dllexport)` added to `sqlite3_ext_funcs_init` for proper DLL export.
+  - `RUNTIME_OUTPUT_DIRECTORY` added for correct `.dll` placement with the Visual Studio generator.
+  - Compiler flags conditioned on `$<CXX_COMPILER_ID:MSVC>`: `/O2 /W4`, `/utf-8`, `/EHsc`, `NOMINMAX`.
+  - Post-build steps (`compile_commands.json` copy, `.cache` removal) guarded with `if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")`.
+  - `EXT_FUNCS_PATH` changed to `$<TARGET_FILE:ext_funcs>` to resolve the correct path across generators and configurations.
+  - CI matrix extended with `windows-latest` runner.
+- **`tests/window_functions_test.cpp`**: Added `#include <algorithm>` (required for `std::sort` on MSVC).
+
+### Known Limitations
+
+- **Google Test suite (`-DSTAT_TESTS=ON`) is not supported on Windows (MSVC)** due to DLL boundary issues with dynamically linked GTest. Integration tests (`a.out.exe`, 266 tests) are fully supported.
+
 ## [0.2.0] - 2026-03-13
 
 ### Changed

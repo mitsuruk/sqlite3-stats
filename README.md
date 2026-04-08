@@ -6,7 +6,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 [![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://mitsuruk.github.io/sqlite3-stats/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
@@ -25,7 +25,7 @@ All 249 functions are verified by 266 integration tests and 388 Google Test auto
 - **Standard SQL interface** — use with `SELECT`, `GROUP BY`, `HAVING`, subqueries, etc.
 - **Window function support** — rolling statistics, moving averages, outlier detection
 - **JSON output** — complex results (multi-value, frequency tables, test results) returned as JSON
-- **Cross-platform** — macOS and Linux
+- **Cross-platform** — macOS, Linux, and Windows (MSVC)
 
 ### Function Categories
 
@@ -44,38 +44,59 @@ All 249 functions are verified by 266 integration tests and 388 Google Test auto
 ### Prerequisites
 
 - CMake 3.20+
-- C++17 compiler (Apple Clang 17+, GCC 13+)
+- C++17 compiler: Apple Clang 17+, GCC 13+, or MSVC (Visual Studio 2022+)
 - SQLite3 (downloaded automatically by CMake)
 - [statcpp](https://github.com/mitsuruk/statcpp) (downloaded automatically by CMake)
 
 ### Build
 
+#### macOS / Linux
+
 ```bash
 git clone https://github.com/mitsuruk/sqlite3-stats.git
 cd sqlite3-stats
-mkdir build && cd build
-cmake ..
-make
+cmake -B build
+cmake --build build
+```
+
+#### Windows (MSVC)
+
+```powershell
+git clone https://github.com/mitsuruk/sqlite3-stats.git
+cd sqlite3-stats
+cmake -B build
+cmake --build build --config Release
 ```
 
 This produces:
 
-- `ext_funcs.dylib` (macOS) or `ext_funcs.so` (Linux) — the loadable extension
-- `a.out` — test runner (266 tests)
+- `ext_funcs.dylib` (macOS) / `ext_funcs.so` (Linux) / `ext_funcs.dll` (Windows) — the loadable extension
+- `a.out` / `a.out.exe` — test runner (266 tests)
 
 ### Run Tests
 
+#### macOS / Linux
+
 ```bash
-./a.out
+./build/a.out
 # [OK] All tests completed (266 tests).
 ```
 
-#### Google Test Suite
+#### Windows (MSVC)
+
+```powershell
+.\build\Release\a.out.exe
+# [OK] All tests completed (266 tests).
+```
+
+#### Google Test Suite (macOS / Linux only)
 
 Requires [Google Test](https://github.com/google/googletest) (`brew install googletest` on macOS).
 
+> **Note**: Google Test is not supported on Windows (MSVC) due to DLL boundary issues with dynamic linking.
+
 ```bash
-cmake -S . -B build -DSTAT_TESTS=true -DCMAKE_BUILD_TYPE=Debug
+cmake -B build -DSTAT_TESTS=true
 cmake --build build
 
 # Run via CTest
@@ -115,8 +136,12 @@ SELECT load_extension('./ext_funcs', 'sqlite3_ext_funcs_init');
 
 ```cpp
 sqlite3_enable_load_extension(db, 1);
-sqlite3_load_extension(db, "./ext_funcs.dylib",
-                        "sqlite3_ext_funcs_init", &errmsg);
+// macOS
+sqlite3_load_extension(db, "./ext_funcs.dylib", "sqlite3_ext_funcs_init", &errmsg);
+// Linux
+sqlite3_load_extension(db, "./ext_funcs.so",    "sqlite3_ext_funcs_init", &errmsg);
+// Windows
+sqlite3_load_extension(db, "./ext_funcs.dll",   "sqlite3_ext_funcs_init", &errmsg);
 ```
 
 > **Note**: The entry point `sqlite3_ext_funcs_init` must be specified explicitly. SQLite's auto-detection strips underscores and will not find it automatically.
@@ -245,8 +270,9 @@ sqlite3-stats is part of the **statcpp family**. Choose the one that fits your u
 
 ## Tested Environments
 
-- macOS + Apple Clang 17.0.0
-- macOS + GCC 15 (Homebrew)
+- macOS + Apple Clang 21.0.0
+- Ubuntu + GCC 13
+- Windows 11 (ARM64, Parallels) + MSVC 19.x (Visual Studio 2026 Community)
 
 ## License
 

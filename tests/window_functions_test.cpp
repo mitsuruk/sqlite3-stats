@@ -13,6 +13,8 @@
 
 #include "test_helpers.hpp"
 
+#include <algorithm>
+
 /// @brief ウィンドウ関数テスト用フィクスチャ
 class WindowFunctions : public StatFuncTest {};
 

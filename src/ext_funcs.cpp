@@ -2825,7 +2825,11 @@ static void sf_n_moe_mean(sqlite3_context* ctx, int argc, sqlite3_value** argv) 
 // Entry point — register all functions
 // ===========================================================================
 
-extern "C" int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
+extern "C"
+#ifdef _WIN32
+__declspec(dllexport)
+#endif
+int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
                                        const sqlite3_api_routines* pApi) {
     SQLITE_EXTENSION_INIT2(pApi);
 

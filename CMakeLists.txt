@@ -172,8 +172,10 @@ endif()
 
 # Build-type flags
 target_compile_options(${PROJECT_NAME} PRIVATE
-    $<$<CONFIG:Release>:-O2 -Wall -funroll-loops>
-    $<$<CONFIG:Debug>:-g -O0 -Wall>
+    $<$<AND:$<CONFIG:Release>,$<CXX_COMPILER_ID:MSVC>>:/O2 /W4>
+    $<$<AND:$<CONFIG:Debug>,$<CXX_COMPILER_ID:MSVC>>:/Zi /Od /W4>
+    $<$<AND:$<CONFIG:Release>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-O2 -Wall -funroll-loops>
+    $<$<AND:$<CONFIG:Debug>,$<NOT:$<CXX_COMPILER_ID:MSVC>>>:-g -O0 -Wall>
 )
 
 # Add compile definitions to a target.
@@ -182,13 +184,22 @@ target_compile_definitions(${PROJECT_NAME}
     PRIVATE
     $<$<CONFIG:Debug>:DEBUG_BUILD>
     $<$<CONFIG:Release>:NDEBUG>
+    $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>
+)
+
+# MSVC: exception handling (/EHsc) required
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/EHsc>
 )
 
 message(STATUS "===============================================================")
 message(STATUS "CMAKE_BUILD_TYPE = ${CMAKE_BUILD_TYPE}")
 
 # Encoding options
-target_compile_options(${PROJECT_NAME} PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+target_compile_options(${PROJECT_NAME} PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/utf-8>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-finput-charset=UTF-8 -fexec-charset=UTF-8>
+)
 
 # ----------------------------
 # Sanitizers (opt-in: -DSANI=true)
@@ -237,21 +248,24 @@ endif()
 # ----------------------------
 # Post-build diagnostics
 # (Some commands are clangd specific)
+# Visual Studio generator does not produce compile_commands.json — skip these steps
 # ----------------------------
-# copy compile_commands.json back to source tree
-add_custom_command(
-    TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
-    COMMENT "Copying compile_commands.json to source directory"
-)
+if(NOT CMAKE_GENERATOR MATCHES "Visual Studio")
+    # copy compile_commands.json back to source tree
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/compile_commands.json ${CMAKE_CURRENT_SOURCE_DIR}/compile_commands.json
+        COMMENT "Copying compile_commands.json to source directory"
+    )
 
-# remove clangd cache files.
-add_custom_command(
-    TARGET ${PROJECT_NAME}
-    POST_BUILD
-    COMMAND ${CMAKE_COMMAND} -E remove_directory "${PROJECT_SOURCE_DIR}/.cache"
-)
+    # remove clangd cache files.
+    add_custom_command(
+        TARGET ${PROJECT_NAME}
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E remove_directory "${PROJECT_SOURCE_DIR}/.cache"
+    )
+endif()
 
 
 # ----------------------------
@@ -561,6 +575,15 @@ add_library(ext_funcs SHARED ${PROJECT_SOURCE_DIR}/src/ext_funcs.cpp)
 # statcpp requires C++17 (std::invoke, etc.)
 target_compile_features(ext_funcs PRIVATE cxx_std_17)
 
+# MSVC: UTF-8 source reading, exception handling, NOMINMAX
+target_compile_options(ext_funcs PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/utf-8 /EHsc>
+    $<$<NOT:$<CXX_COMPILER_ID:MSVC>>:-finput-charset=UTF-8 -fexec-charset=UTF-8>
+)
+target_compile_definitions(ext_funcs PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:NOMINMAX>
+)
+
 # The extension library references sqlite3 headers and src/include (picosha2.h)
 target_link_libraries(ext_funcs PRIVATE sqlite3)
 target_include_directories(ext_funcs PRIVATE
@@ -576,13 +599,16 @@ set_target_properties(ext_funcs PROPERTIES
 )
 
 # Place the extension library in the same directory as the executable
+# Windows: DLL goes to RUNTIME_OUTPUT_DIRECTORY, import lib goes to LIBRARY_OUTPUT_DIRECTORY
 set_target_properties(ext_funcs PROPERTIES
     LIBRARY_OUTPUT_DIRECTORY ${BINARY_OUTPUT_DIR}
+    RUNTIME_OUTPUT_DIRECTORY ${BINARY_OUTPUT_DIR}
 )
 
 # Pass the extension library path to the main executable at compile time
+# $<TARGET_FILE:ext_funcs> resolves to the actual output path for the current generator/config
 target_compile_definitions(${PROJECT_NAME} PRIVATE
-    EXT_FUNCS_PATH="${BINARY_OUTPUT_DIR}/ext_funcs$<IF:$<PLATFORM_ID:Darwin>,.dylib,$<IF:$<PLATFORM_ID:Windows>,.dll,.so>>"
+    EXT_FUNCS_PATH="$<TARGET_FILE:ext_funcs>"
 )
 
 # Build the extension library before the main executable
@@ -590,8 +616,9 @@ add_dependencies(${PROJECT_NAME} ext_funcs)
 
 # ----------------------------
 # Google Test for statistical functions (SQL-based)
+# Google Test is not supported on MSVC (Windows) due to DLL boundary issues with dynamic GTest
 # ----------------------------
-if(STAT_TESTS)
+if(STAT_TESTS AND NOT MSVC)
     find_package(GTest REQUIRED)
     enable_testing()
 
@@ -617,9 +644,11 @@ if(STAT_TESTS)
         GTest::gmock_main
     )
     target_compile_definitions(stat_tests PRIVATE
-        EXT_FUNCS_PATH="${BINARY_OUTPUT_DIR}/ext_funcs$<IF:$<PLATFORM_ID:Darwin>,.dylib,$<IF:$<PLATFORM_ID:Windows>,.dll,.so>>"
+        EXT_FUNCS_PATH="$<TARGET_FILE:ext_funcs>"
     )
-    target_compile_options(stat_tests PRIVATE -finput-charset=UTF-8 -fexec-charset=UTF-8)
+    target_compile_options(stat_tests PRIVATE
+        -finput-charset=UTF-8 -fexec-charset=UTF-8
+    )
 
     add_dependencies(stat_tests ext_funcs)
 
@@ -632,4 +661,6 @@ if(STAT_TESTS)
         TIMEOUT 120
         ENVIRONMENT "GTEST_COLOR=1"
     )
+elseif(STAT_TESTS AND MSVC)
+    message(STATUS "STAT_TESTS: Google Test is disabled on MSVC (DLL boundary issue with dynamic GTest)")
 endif()

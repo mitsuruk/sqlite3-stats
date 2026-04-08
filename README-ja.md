@@ -6,7 +6,7 @@ SQLite3 に **249 個の統計関数** を追加するロード可能な拡張�
 [![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://mitsuruk.github.io/sqlite3-stats/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
-[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
+[![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
@@ -25,7 +25,7 @@ sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び�
 - **標準 SQL インターフェース** — `SELECT`、`GROUP BY`、`HAVING`、サブクエリなどで使用可能
 - **ウィンドウ関数対応** — 移動統計量、移動平均、外れ値検出
 - **JSON 出力** — 複合的な結果（複数値、度数表、検定結果）を JSON で返却
-- **クロスプラットフォーム** — macOS および Linux 対応
+- **クロスプラットフォーム** — macOS, Linux, Windows (MSVC) 対応
 
 ### 関数カテゴリ
 
@@ -44,38 +44,59 @@ sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び�
 ### 前提条件
 
 - CMake 3.20 以上
-- C++17 コンパイラ（Apple Clang 17 以上、GCC 13 以上）
-- SQLite3（CMake が自動ダウンロード）
-- [statcpp](https://github.com/mitsuruk/statcpp)（CMake が自動ダウンロード）
+- C++17 コンパイラ: Apple Clang 17 以上, GCC 13 以上, または MSVC (Visual Studio 2022 以上)
+- SQLite3 (CMake が自動ダウンロード)
+- [statcpp](https://github.com/mitsuruk/statcpp) (CMake が自動ダウンロード)
 
 ### ビルド
+
+#### macOS / Linux
 
 ```bash
 git clone https://github.com/mitsuruk/sqlite3-stats.git
 cd sqlite3-stats
-mkdir build && cd build
-cmake ..
-make
+cmake -B build
+cmake --build build
+```
+
+#### Windows (MSVC)
+
+```powershell
+git clone https://github.com/mitsuruk/sqlite3-stats.git
+cd sqlite3-stats
+cmake -B build
+cmake --build build --config Release
 ```
 
 以下が生成されます:
 
-- `ext_funcs.dylib`（macOS）または `ext_funcs.so`（Linux） — ロード可能な拡張機能
-- `a.out` — テストランナー（266 テスト）
+- `ext_funcs.dylib` (macOS) / `ext_funcs.so` (Linux) / `ext_funcs.dll` (Windows) — ロード可能な拡張機能
+- `a.out` / `a.out.exe` — テストランナー (266 テスト)
 
 ### テストの実行
 
+#### macOS / Linux
+
 ```bash
-./a.out
+./build/a.out
 # [OK] All tests completed (266 tests).
 ```
 
-#### Google Test スイート
+#### Windows (MSVC)
 
-[Google Test](https://github.com/google/googletest) が必要です（macOS: `brew install googletest`）。
+```powershell
+.\build\Release\a.out.exe
+# [OK] All tests completed (266 tests).
+```
+
+#### Google Test スイート (macOS / Linux のみ)
+
+[Google Test](https://github.com/google/googletest) が必要です (macOS: `brew install googletest`).
+
+> **注意**: Windows (MSVC) では動的リンクの DLL 境界問題により Google Test は非対応です.
 
 ```bash
-cmake -S . -B build -DSTAT_TESTS=true -DCMAKE_BUILD_TYPE=Debug
+cmake -B build -DSTAT_TESTS=true
 cmake --build build
 
 # CTest 経由で実行
@@ -115,8 +136,12 @@ SELECT load_extension('./ext_funcs', 'sqlite3_ext_funcs_init');
 
 ```cpp
 sqlite3_enable_load_extension(db, 1);
-sqlite3_load_extension(db, "./ext_funcs.dylib",
-                        "sqlite3_ext_funcs_init", &errmsg);
+// macOS
+sqlite3_load_extension(db, "./ext_funcs.dylib", "sqlite3_ext_funcs_init", &errmsg);
+// Linux
+sqlite3_load_extension(db, "./ext_funcs.so",    "sqlite3_ext_funcs_init", &errmsg);
+// Windows
+sqlite3_load_extension(db, "./ext_funcs.dll",   "sqlite3_ext_funcs_init", &errmsg);
 ```
 
 > **注意**: エントリポイント `sqlite3_ext_funcs_init` を明示的に指定する必要があります。SQLite の自動検出はアンダースコアを除去するため、自動では見つかりません。
@@ -245,8 +270,9 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 
 ## 動作確認環境
 
-- macOS + Apple Clang 17.0.0
-- macOS + GCC 15 (Homebrew)
+- macOS + Apple Clang 21.0.0
+- Ubuntu + GCC 13
+- Windows 11 (ARM64, Parallels) + MSVC 19.x (Visual Studio 2026 Community)
 
 ## ライセンス
 

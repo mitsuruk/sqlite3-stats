@@ -20,6 +20,10 @@ jobs:
             compiler: gcc
             cc: gcc-13
             cxx: g++-13
+          - os: windows-latest
+            compiler: msvc
+            cc: cl
+            cxx: cl
 
     runs-on: ${{ matrix.os }}
     name: ${{ matrix.os }} (${{ matrix.compiler }})
@@ -34,6 +38,7 @@ jobs:
           sudo apt-get install -y cmake g++-13
 
       - name: Configure
+        if: runner.os != 'Windows'
         env:
           CC: ${{ matrix.cc }}
           CXX: ${{ matrix.cxx }}
@@ -42,9 +47,27 @@ jobs:
           cd build
           cmake ..
 
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          mkdir build
+          cd build
+          cmake ..
+
       - name: Build
+        if: runner.os != 'Windows'
         run: cmake --build build
 
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: cmake --build build --config Release
+
       - name: Test
+        if: runner.os != 'Windows'
         working-directory: build
         run: ./a.out
+
+      - name: Test (Windows)
+        if: runner.os == 'Windows'
+        working-directory: build
+        run: .\Release\a.out.exe
