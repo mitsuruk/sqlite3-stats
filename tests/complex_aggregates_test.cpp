@@ -506,7 +506,7 @@ TEST_F(ComplexAggregates, BootstrapSampleEmpty) {
 // 26. stat_permutation_test2 (JSON返却, 非決定的)
 // =====================================================================
 
-/// @brief 正常系: 順列検定, 2群は明確に異なるので p_value < 0.1
+/// @brief 正常系: 置換検定, 2群は明確に異なるので p_value < 0.1
 TEST_F(ComplexAggregates, PermutationTest2Normal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_test2(val, grp) FROM grp_data");
@@ -529,7 +529,7 @@ TEST_F(ComplexAggregates, PermutationTest2Empty) {
 // 27. stat_permutation_paired (JSON返却, 非決定的)
 // =====================================================================
 
-/// @brief 正常系: 対応のある順列検定が空でないJSON文字列
+/// @brief 正常系: 対応のある置換検定が空でないJSON文字列
 TEST_F(ComplexAggregates, PermutationPairedNormal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_paired(x, y) FROM xy_data");
@@ -546,7 +546,7 @@ TEST_F(ComplexAggregates, PermutationPairedEmpty) {
 // 28. stat_permutation_corr (JSON返却, 非決定的)
 // =====================================================================
 
-/// @brief 正常系: 相関の順列検定が空でないJSON文字列
+/// @brief 正常系: 相関の置換検定が空でないJSON文字列
 TEST_F(ComplexAggregates, PermutationCorrNormal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_corr(x, y) FROM xy_data");

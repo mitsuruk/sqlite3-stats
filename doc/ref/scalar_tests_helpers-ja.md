@@ -172,7 +172,7 @@ SELECT stat_fisher_exact(10, 5, 3, 12);
 | `stat_odds_ratio` | `stat_odds_ratio(a, b, c, d)` | オッズ比 |
 | `stat_relative_risk` | `stat_relative_risk(a, b, c, d)` | 相対リスク |
 | `stat_risk_difference` | `stat_risk_difference(a, b, c, d)` | リスク差 |
-| `stat_nnt` | `stat_nnt(a, b, c, d)` | 治療必要数 (NNT) |
+| `stat_nnt` | `stat_nnt(a, b, c, d)` | 治療必要人数 (NNT) |
 
 ```sql
 -- 2×2分割表: [[a, b], [c, d]]

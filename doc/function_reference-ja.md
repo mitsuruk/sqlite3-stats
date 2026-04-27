@@ -146,7 +146,7 @@ GROUP BY category;
 | `stat_ci_mean(col, confidence)` | 平均の信頼区間（t） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean) |
 | `stat_ci_mean_z(col, sigma, confidence)` | 平均の信頼区間（z） | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_mean_z) |
 | `stat_ci_var(col, confidence)` | 分散の信頼区間 | JSON | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_ci_var) |
-| `stat_moe_mean(col, confidence)` | 平均の誤差マージン | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_moe_mean) |
+| `stat_moe_mean(col, confidence)` | 平均の誤差限界 | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_moe_mean) |
 | `stat_cohens_d(col, mu0)` | Cohen's d（1標本） | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_cohens_d) |
 | `stat_hedges_g(col, mu0)` | Hedges' g（1標本） | REAL | 2 | [詳細](ref/parameterized_aggregates-ja.md#stat_hedges_g) |
 | `stat_acf_lag(col, lag)` | 自己相関係数 | REAL | lag+1 | [詳細](ref/parameterized_aggregates-ja.md#stat_acf_lag) |
@@ -288,7 +288,7 @@ GROUP BY category;
 | `stat_odds_ratio(a, b, c, d)` | オッズ比 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
 | `stat_relative_risk(a, b, c, d)` | 相対リスク | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
 | `stat_risk_difference(a, b, c, d)` | リスク差 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
-| `stat_nnt(a, b, c, d)` | 治療必要数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
+| `stat_nnt(a, b, c, d)` | 治療必要人数 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
 | `stat_ci_prop(x, n [,conf])` | 比率の信頼区間（Wald） | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
 | `stat_ci_prop_wilson(x, n [,conf])` | 比率の信頼区間（Wilson） | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
 | `stat_ci_prop_diff(x1, n1, x2, n2 [,conf])` | 比率差の信頼区間 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#比率の信頼区間) |
@@ -341,10 +341,10 @@ GROUP BY category;
 | `stat_n_t2(d, power, alpha)` | 2標本必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
 | `stat_power_prop(p1, p2, n, alpha)` | 比率検出力 | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
 | `stat_n_prop(p1, p2, power, alpha)` | 比率必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#検出力分析) |
-| `stat_moe_prop(x, n [,conf])` | 比率の誤差マージン | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
-| `stat_moe_prop_worst(n [,conf])` | 最悪ケース誤差マージン | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
-| `stat_n_moe_prop(moe [,conf [,p]])` | 比率推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
-| `stat_n_moe_mean(moe, sigma [,conf])` | 平均推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差マージン) |
+| `stat_moe_prop(x, n [,conf])` | 比率の誤差限界 | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差限界) |
+| `stat_moe_prop_worst(n [,conf])` | 最悪ケース誤差限界 | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差限界) |
+| `stat_n_moe_prop(moe [,conf [,p]])` | 比率推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差限界) |
+| `stat_n_moe_mean(moe, sigma [,conf])` | 平均推定の必要 n | REAL | [詳細](ref/scalar_distributions-ja.md#サンプルサイズ誤差限界) |
 
 ---
 

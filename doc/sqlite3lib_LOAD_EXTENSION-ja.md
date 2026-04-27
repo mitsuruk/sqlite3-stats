@@ -137,7 +137,7 @@ sqlite3StatisticalLibrary/
 | `stat_ci_mean(col, confidence)` | 数値, 数値 | JSON | 平均の信頼区間（t 分布） |
 | `stat_ci_mean_z(col, sigma, confidence)` | 数値, 数値, 数値 | JSON | 平均の信頼区間（z 分布） |
 | `stat_ci_var(col, confidence)` | 数値, 数値 | JSON | 分散の信頼区間 |
-| `stat_moe_mean(col, confidence)` | 数値, 数値 | 数値 | 平均の誤差マージン |
+| `stat_moe_mean(col, confidence)` | 数値, 数値 | 数値 | 平均の誤差限界 |
 | `stat_cohens_d(col, mu0)` | 数値, 数値 | 数値 | Cohen's d（1標本） |
 | `stat_hedges_g(col, mu0)` | 数値, 数値 | 数値 | Hedges' g（1標本） |
 | `stat_acf_lag(col, lag)` | 数値, 数値 | 数値 | 自己相関係数 |
@@ -221,7 +221,7 @@ sqlite3StatisticalLibrary/
 | `stat_relative_frequency(col)` | 数値 1 | JSON | 相対度数 |
 | `stat_cumulative_frequency(col)` | 数値 1 | JSON | 累積度数 |
 | `stat_cumulative_relative_frequency(col)` | 数値 1 | JSON | 累積相対度数 |
-| `stat_t_test2(grp1, grp2)` | 数値, 数値 | JSON | 2標本 t 検定（プール分散） |
+| `stat_t_test2(grp1, grp2)` | 数値, 数値 | JSON | 2標本 t 検定（併合分散） |
 | `stat_t_test_welch(grp1, grp2)` | 数値, 数値 | JSON | Welch t 検定 |
 | `stat_chisq_independence(col1, col2)` | 数値, 数値 | JSON | カイ二乗独立性検定 |
 | `stat_f_test(grp1, grp2)` | 数値, 数値 | JSON | F 検定（分散比較） |
@@ -285,7 +285,7 @@ sqlite3StatisticalLibrary/
 | `stat_odds_ratio(a, b, c, d)` | 4 | 数値 | オッズ比 |
 | `stat_relative_risk(a, b, c, d)` | 4 | 数値 | 相対リスク |
 | `stat_risk_difference(a, b, c, d)` | 4 | 数値 | リスク差 |
-| `stat_nnt(a, b, c, d)` | 4 | 数値 | 治療必要数 (NNT) |
+| `stat_nnt(a, b, c, d)` | 4 | 数値 | 治療必要人数 (NNT) |
 | `stat_ci_prop(x, n [,confidence])` | 2〜3 | JSON | 比率の信頼区間（Wald 法） |
 | `stat_ci_prop_wilson(x, n [,confidence])` | 2〜3 | JSON | 比率の信頼区間（Wilson 法） |
 | `stat_ci_prop_diff(x1, n1, x2, n2 [,conf])` | 4〜5 | JSON | 2標本比率差の信頼区間 |
@@ -379,8 +379,8 @@ sqlite3StatisticalLibrary/
 | `stat_n_t2(d, power, alpha)` | 3 | 数値 | 2標本 t 検定の必要サンプルサイズ |
 | `stat_power_prop(p1, p2, n, alpha)` | 4 | 数値 | 比率検定の検出力 |
 | `stat_n_prop(p1, p2, power, alpha)` | 4 | 数値 | 比率検定の必要サンプルサイズ |
-| `stat_moe_prop(x, n [,confidence])` | 2〜3 | 数値 | 比率の誤差マージン |
-| `stat_moe_prop_worst(n [,confidence])` | 1〜2 | 数値 | 最悪ケースの誤差マージン |
+| `stat_moe_prop(x, n [,confidence])` | 2〜3 | 数値 | 比率の誤差限界 |
+| `stat_moe_prop_worst(n [,confidence])` | 1〜2 | 数値 | 最悪ケースの誤差限界 |
 | `stat_n_moe_prop(moe [,confidence [,p]])` | 1〜3 | 数値 | 比率推定のサンプルサイズ |
 | `stat_n_moe_mean(moe, sigma [,confidence])` | 2〜3 | 数値 | 平均推定のサンプルサイズ |
 

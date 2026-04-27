@@ -240,23 +240,23 @@ SELECT stat_n_prop(0.5, 0.3, 0.8, 0.05);
 
 ---
 
-## サンプルサイズ・誤差マージン
+## サンプルサイズ・誤差限界
 
 | 関数 | 構文 | 説明 |
 |---|---|---|
-| `stat_moe_prop` | `stat_moe_prop(x, n [,confidence])` | 比率の誤差マージン |
-| `stat_moe_prop_worst` | `stat_moe_prop_worst(n [,confidence])` | 最悪ケースの誤差マージン（p=0.5） |
+| `stat_moe_prop` | `stat_moe_prop(x, n [,confidence])` | 比率の誤差限界 |
+| `stat_moe_prop_worst` | `stat_moe_prop_worst(n [,confidence])` | 最悪ケースの誤差限界（p=0.5） |
 | `stat_n_moe_prop` | `stat_n_moe_prop(moe [,confidence [,p]])` | 比率推定の必要サンプルサイズ |
 | `stat_n_moe_mean` | `stat_n_moe_mean(moe, sigma [,confidence])` | 平均推定の必要サンプルサイズ |
 
 ```sql
--- 成功数 200, n=400 の誤差マージン（95%信頼区間）
+-- 成功数 200, n=400 の誤差限界（95%信頼区間）
 SELECT stat_moe_prop(200, 400);
 
--- 誤差マージン 3% 以内に収めるためのサンプルサイズ
+-- 誤差限界 3% 以内に収めるためのサンプルサイズ
 SELECT stat_n_moe_prop(0.03);
 
--- 平均推定: 誤差マージン 2.0 以内, σ=15
+-- 平均推定: 誤差限界 2.0 以内, σ=15
 SELECT stat_n_moe_mean(2.0, 15.0);
 ```
 

@@ -100,7 +100,7 @@ SELECT stat_cumulative_relative_frequency(score) FROM exam;
 
 ### stat_t_test2
 
-**2標本 t 検定**（プール分散）を実行する。2カラムにそれぞれのグループの値を渡す。
+**2標本 t 検定**（併合分散）を実行する。2カラムにそれぞれのグループの値を渡す。
 
 **構文**: `stat_t_test2(group1, group2)`
 
@@ -230,7 +230,7 @@ SELECT stat_glass_delta(control, treatment) FROM experiment;
 
 ### stat_ci_mean_diff
 
-**2標本平均差の信頼区間**（プール分散）を JSON で返す。
+**2標本平均差の信頼区間**（併合分散）を JSON で返す。
 
 **構文**: `stat_ci_mean_diff(group1, group2)`
 

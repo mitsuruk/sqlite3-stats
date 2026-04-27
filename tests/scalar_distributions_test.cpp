@@ -593,7 +593,7 @@ TEST_F(ScalarDistributions, NProp) {
 // MoE/サンプルサイズ (4関数)
 // =====================================================================
 
-/// @brief 比率の誤差幅(MoE): x=50, n=100 → 正の値(約0.098)
+/// @brief 比率の誤差限界(MoE): x=50, n=100 → 正の値(約0.098)
 TEST_F(ScalarDistributions, MoeProp) {
     double result = query_double(db_, "SELECT stat_moe_prop(50, 100)");
     EXPECT_GT(result, 0.0);

@@ -252,7 +252,7 @@ private:
             "INSERT INTO wt_data VALUES "
             "(10,1),(20,2),(30,3),(40,2),(50,1)");
 
-        // pred_data: 予測精度メトリクス用
+        // pred_data: 予測精度指標用
         exec_sql(db_, "CREATE TABLE pred_data (actual REAL, predicted REAL)");
         exec_sql(db_,
             "INSERT INTO pred_data VALUES "

@@ -318,7 +318,7 @@ TEST_F(ParameterizedAggregates, CiVarEmpty) {
 // 13. stat_moe_mean
 // =====================================================================
 
-/// @brief 正常系: 誤差の限界 → 正の値(約2.16)
+/// @brief 正常系: 誤差限界 → 正の値(約2.16)
 TEST_F(ParameterizedAggregates, MoeMeanNormal) {
     double result = query_double(
         db_, "SELECT stat_moe_mean(val, 0.95) FROM data");

@@ -537,7 +537,7 @@ FROM data;
 
 ### stat_moe_mean
 
-**平均の誤差マージン** (Margin of Error) を計算する。信頼区間の半幅。
+**平均の誤差限界** (Margin of Error) を計算する。信頼区間の半幅。
 
 $$MOE = t_{\alpha/2, n-1} \cdot \frac{s}{\sqrt{n}}$$
 
@@ -550,7 +550,7 @@ $$MOE = t_{\alpha/2, n-1} \cdot \frac{s}{\sqrt{n}}$$
 > **最小データ数**: 2
 
 ```sql
--- 95% 信頼水準の誤差マージン
+-- 95% 信頼水準の誤差限界
 SELECT stat_moe_mean(score, 0.95) AS moe FROM exam;
 
 -- 平均 ± MOE の形式で表示
@@ -713,7 +713,7 @@ FROM model_residuals;
 
 | パラメータ | 説明 | 典型値 |
 |---|---|---|
-| `c` | チューニング定数 | 9.0（デフォルト的） |
+| `c` | チューニング定数 | 9.0（標準的な値） |
 
 > `c` が大きいほど外れ値に寛容になる。`c = 9.0` はガウス分布で効率 95% のロバスト推定を与える。
 

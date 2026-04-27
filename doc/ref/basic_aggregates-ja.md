@@ -620,7 +620,7 @@ GROUP BY group_name;
 
 ### stat_mad
 
-**中央絶対偏差** (Median Absolute Deviation) を計算する。外れ値に対して非常に頑健なばらつきの指標。
+**中央絶対偏差** (Median Absolute Deviation) を計算する。外れ値に対して非常にロバストなばらつきの指標。
 
 $$MAD = \text{median}(|x_i - \tilde{x}|)$$
 
@@ -665,9 +665,9 @@ SELECT stat_sample_stddev(val) AS stddev,
        stat_mad_scaled(val)    AS mad_scaled
 FROM normal_data;
 
--- 外れ値がある場合、MAD_scaled のほうが頑健
+-- 外れ値がある場合、MAD_scaled のほうがロバスト
 SELECT stat_sample_stddev(val) AS stddev,     -- 外れ値で膨らむ
-       stat_mad_scaled(val)    AS mad_scaled   -- 頑健
+       stat_mad_scaled(val)    AS mad_scaled   -- ロバスト
 FROM data_with_outliers;
 
 -- 品質管理での利用
@@ -682,7 +682,7 @@ GROUP BY batch_id;
 
 ### stat_hodges_lehmann
 
-**Hodges-Lehmann 推定量**を計算する。全ペアワイズ平均の中央値。ロバストな位置の推定量。
+**Hodges-Lehmann 推定量**を計算する。全てのペア平均の中央値。ロバストな位置の推定量。
 
 $$\hat{\theta}_{HL} = \text{median}\left\{\frac{x_i + x_j}{2} : 1 \le i \le j \le n\right\}$$
 
