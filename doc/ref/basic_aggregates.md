@@ -684,7 +684,7 @@ GROUP BY batch_id;
 
 Computes the **Hodges-Lehmann estimator**. The median of all pairwise means. A robust estimator of location.
 
-$$\hat{\theta}_{HL} = \text{median}\left\{\frac{x_i + x_j}{2} : 1 \le i \le j \le n\right\}$$
+$$\hat{\theta}_{HL}=\operatorname{median}\left\lbrace\frac{x_i + x_j}{2}\mid 1 \le i \le j \le n\right\rbrace$$
 
 **Syntax**: `stat_hodges_lehmann(column)`
 
