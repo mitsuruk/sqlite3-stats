@@ -684,7 +684,7 @@ GROUP BY batch_id;
 
 **Hodges-Lehmann 推定量**を計算する。全てのペア平均の中央値。ロバストな位置の推定量。
 
-$$\hat{\theta}_{HL}=\operatorname{median}\left\lbrace\frac{x_i + x_j}{2}\mid 1 \le i \le j \le n\right\rbrace$$
+$$\hat{\theta}_{HL}=\mathrm{median}\left\lbrace\frac{x_i + x_j}{2}\mid 1 \le i \le j \le n\right\rbrace$$
 
 **構文**: `stat_hodges_lehmann(column)`
 
