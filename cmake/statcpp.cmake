@@ -27,7 +27,7 @@ message(STATUS "statcpp configuration:")
 # Path to download/install directories
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.2.0")
+set(STATCPP_VERSION "0.3.0")
 set(STATCPP_TAG "v${STATCPP_VERSION}")
 set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 
