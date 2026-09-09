@@ -84,6 +84,20 @@ SELECT stat_mean(val) FROM sample WHERE val > 100;
 | `stat_population_kurtosis`, `stat_kurtosis` | 4 |
 | その他 | 1 |
 
+### 不正な引数
+
+関数の定義域を外れた引数（1 を超える確率、`(0, 1)` の外の信頼水準、0.5 以上のトリム率など）は、
+通常の SQL エラーとして報告される。
+
+```text
+sqlite> SELECT stat_poisson_quantile(1.5, 2.5);
+Error: stepping, statcpp::poisson_quantile: p must be in [0, 1]
+```
+
+その文が失敗するだけで接続は使用可能なまま残り、プロセスが停止することはない。スカラー関数・
+集約関数・ウィンドウ関数のいずれでも同様。なお、データ数不足や空入力はエラーではなく、上記の
+とおり `NULL` を返す。
+
 ### GROUP BY との併用
 
 すべての集約関数は `GROUP BY` と併用可能。

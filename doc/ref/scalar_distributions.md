@@ -78,6 +78,11 @@ SELECT stat_weibull_cdf(3.0, 2.0, 1.5);     -- Weibull distribution CDF
 
 For each distribution, four variants are provided: PMF / CDF / Quantile / Rand.
 
+> **Quantile at q = 1.0**: The Poisson, geometric and negative binomial distributions have
+> unbounded support, so no finite value satisfies `q = 1.0`. Those three quantile functions
+> return `NULL` there. The binomial, hypergeometric and discrete uniform distributions have
+> bounded support and return their maximum value as usual.
+
 ### Binomial Distribution
 
 | Function | Syntax | Description |

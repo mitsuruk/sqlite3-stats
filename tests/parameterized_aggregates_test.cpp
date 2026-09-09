@@ -482,3 +482,36 @@ TEST_F(ParameterizedAggregates, BootstrapStddevEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_bootstrap_stddev(val, 500) FROM empty_data"));
 }
+
+// =====================================================================
+// 例外境界: 集約関数の不正な引数はプロセスを落とさず SQL エラーになる
+//
+// 集約関数では例外は xFinal の中で送出される.捕捉できていないと
+// std::terminate に至るうえ,集約ステートも解放されずリークする.
+// 以下のテストが「実行できて値を返すこと」自体がガードの動作確認になる.
+// =====================================================================
+
+/// @brief 異常系: パーセンタイルの範囲外指定 → SQL エラー(abort しない)
+TEST_F(ParameterizedAggregates, InvalidPercentileRaisesSqlError) {
+    std::string msg = query_error(db_, "SELECT stat_percentile(val, 150) FROM data");
+    EXPECT_NE(msg.find("p must be in"), std::string::npos) << "actual: " << msg;
+}
+
+/// @brief 異常系: 信頼水準の範囲外指定 → SQL エラー(abort しない)
+TEST_F(ParameterizedAggregates, InvalidConfidenceRaisesSqlError) {
+    std::string msg = query_error(db_, "SELECT stat_ci_mean(val, 1.5) FROM data");
+    EXPECT_NE(msg.find("confidence must be in"), std::string::npos) << "actual: " << msg;
+}
+
+/// @brief 異常系: トリム率の範囲外指定 → SQL エラー(abort しない)
+TEST_F(ParameterizedAggregates, InvalidTrimProportionRaisesSqlError) {
+    std::string msg = query_error(db_, "SELECT stat_trimmed_mean(val, 0.9) FROM data");
+    EXPECT_NE(msg.find("proportion must be in"), std::string::npos) << "actual: " << msg;
+}
+
+/// @brief 異常系: 範囲外引数のあとも同じ接続で正常な集約を継続できる
+TEST_F(ParameterizedAggregates, ConnectionSurvivesInvalidAggregateArgument) {
+    query_error(db_, "SELECT stat_percentile(val, 150) FROM data");
+    EXPECT_NEAR(query_double(db_, "SELECT stat_percentile(val, 0.5) FROM data"),
+                5.5, 1e-9);
+}

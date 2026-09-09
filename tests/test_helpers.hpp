@@ -119,6 +119,35 @@ inline bool query_is_null(sqlite3* db, const char* sql) {
 }
 
 /**
+ * @brief SELECT がエラーになることを確認し,エラーメッセージを返す
+ *
+ * statcpp は引数が不正な場合に std::invalid_argument を送出する.
+ * 拡張機能側でこれを捕捉できていないと,例外が SQLite の C ABI 境界を越えて
+ * std::terminate に至り,テストプロセスごと停止する.
+ * 本ヘルパが値を返せること自体が,ガードが機能している証拠になる.
+ *
+ * @param db 対象のデータベース接続
+ * @param sql 実行する SQL
+ * @return エラーになった場合はそのメッセージ,成功した場合は空文字列
+ */
+inline std::string query_error(sqlite3* db, const char* sql) {
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    if (rc != SQLITE_OK) {
+        std::string msg = sqlite3_errmsg(db);
+        sqlite3_finalize(stmt);
+        return msg;
+    }
+    rc = sqlite3_step(stmt);
+    std::string msg;
+    if (rc != SQLITE_ROW && rc != SQLITE_DONE) {
+        msg = sqlite3_errmsg(db);
+    }
+    sqlite3_finalize(stmt);
+    return msg;
+}
+
+/**
  * @brief SELECT の複数行結果を vector<double> で取得する(ウィンドウ関数用)
  *        NULL 行は NaN として格納
  */

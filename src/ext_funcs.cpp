@@ -23,9 +23,70 @@
 #include <cstring>
 #include <limits>
 
+#include <exception>
+#include <utility>
+
 #include <statcpp/statcpp.hpp>
 
 SQLITE_EXTENSION_INIT1
+
+// ===========================================================================
+// Exception boundary
+//
+// SQLite is a C library, so its callbacks are invoked across a C ABI. Letting an
+// exception propagate out of one would unwind C frames and call std::terminate,
+// killing the host process. statcpp reports invalid arguments by throwing
+// std::invalid_argument, so without a guard a plain SQL expression such as
+// stat_poisson_quantile(1.5, 2.5) would abort any process that loaded this
+// extension. Every callback therefore runs its body through invoke_guarded().
+// ===========================================================================
+
+/**
+ * @brief SQLite のコールバック本体を実行し, 送出された例外を SQL エラーに変換する
+ *
+ * SQLite は C の ABI でコールバックを呼び出すため, 例外が境界を越えると
+ * std::terminate に至りホストプロセスごと停止する. 本ヘルパを通すことで,
+ * 例外は sqlite3_result_error() 経由の通常の SQL エラーとして報告される.
+ *
+ * @param ctx SQLite の関数コンテキスト
+ * @param body 実行する処理(引数なしの呼び出し可能オブジェクト)
+ */
+template <typename Body>
+static void invoke_guarded(sqlite3_context* ctx, Body&& body) {
+    try {
+        std::forward<Body>(body)();
+    } catch (const std::exception& e) {
+        sqlite3_result_error(ctx, e.what(), -1);
+    } catch (...) {
+        sqlite3_result_error(ctx, "sqlite3-stats: unknown error", -1);
+    }
+}
+
+/**
+ * @brief 集約ステートをスコープ終了時に確実に破棄する RAII ガード
+ *
+ * xFinal の途中で例外が送出されても解放漏れが起きないようにする.
+ * sqlite3_aggregate_context() が返すバッファにはヒープ上のステートへの
+ * ポインタが格納されているため, 破棄後にヌルを書き戻す.
+ */
+template <typename State>
+class AggregateStateGuard {
+public:
+    explicit AggregateStateGuard(State** pp) : pp_(pp) {}
+
+    ~AggregateStateGuard() {
+        if (pp_ && *pp_) {
+            delete *pp_;
+            *pp_ = nullptr;
+        }
+    }
+
+    AggregateStateGuard(const AggregateStateGuard&) = delete;
+    AggregateStateGuard& operator=(const AggregateStateGuard&) = delete;
+
+private:
+    State** pp_;  ///< 集約コンテキスト内のステートポインタへのポインタ
+};
 
 // ===========================================================================
 // Template A — SingleColumnAggregate
@@ -45,27 +106,31 @@ template <double (*Func)(const std::vector<double>&)>
 class SingleColumnAggregate {
 public:
     static void xStep(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->values.push_back(sqlite3_value_double(argv[0]));
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->values.push_back(sqlite3_value_double(argv[0]));
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<SingleColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<SingleColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        double result = Func((*pp)->values);
-        cleanupState(pp);
-        if (std::isnan(result) || std::isinf(result)) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_double(ctx, result);
-        }
+        invoke_guarded(ctx, [&] {
+            double result = Func((*pp)->values);
+            if (std::isnan(result) || std::isinf(result)) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_double(ctx, result);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -95,12 +160,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(SingleColumnState** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // ===========================================================================
@@ -257,36 +316,40 @@ public:
     using State = SingleColumnParamState<NParams>;
 
     static void xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->values.push_back(sqlite3_value_double(argv[0]));
-        if (!state->params_set) {
-            for (std::size_t i = 0; i < NParams; ++i) {
-                if (static_cast<int>(i + 1) < argc &&
-                    sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
-                    state->params[i] = sqlite3_value_double(argv[i + 1]);
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->values.push_back(sqlite3_value_double(argv[0]));
+            if (!state->params_set) {
+                for (std::size_t i = 0; i < NParams; ++i) {
+                    if (static_cast<int>(i + 1) < argc &&
+                        sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
+                        state->params[i] = sqlite3_value_double(argv[i + 1]);
+                    }
                 }
+                state->params_set = true;
             }
-            state->params_set = true;
-        }
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        double result = Func((*pp)->values, (*pp)->params);
-        cleanupState(pp);
-        if (std::isnan(result) || std::isinf(result)) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_double(ctx, result);
-        }
+        invoke_guarded(ctx, [&] {
+            double result = Func((*pp)->values, (*pp)->params);
+            if (std::isnan(result) || std::isinf(result)) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_double(ctx, result);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -311,12 +374,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(State** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // --- B2: returns JSON text ---
@@ -329,38 +386,42 @@ public:
     using State = SingleColumnParamState<NParams>;
 
     static void xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->values.push_back(sqlite3_value_double(argv[0]));
-        if (!state->params_set) {
-            for (std::size_t i = 0; i < NParams; ++i) {
-                if (static_cast<int>(i + 1) < argc &&
-                    sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
-                    state->params[i] = sqlite3_value_double(argv[i + 1]);
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->values.push_back(sqlite3_value_double(argv[0]));
+            if (!state->params_set) {
+                for (std::size_t i = 0; i < NParams; ++i) {
+                    if (static_cast<int>(i + 1) < argc &&
+                        sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
+                        state->params[i] = sqlite3_value_double(argv[i + 1]);
+                    }
                 }
+                state->params_set = true;
             }
-            state->params_set = true;
-        }
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        std::string result = Func((*pp)->values, (*pp)->params);
-        cleanupState(pp);
-        if (result.empty()) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_text(ctx, result.c_str(),
-                                static_cast<int>(result.size()),
-                                SQLITE_TRANSIENT);
-        }
+        invoke_guarded(ctx, [&] {
+            std::string result = Func((*pp)->values, (*pp)->params);
+            if (result.empty()) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_text(ctx, result.c_str(),
+                                    static_cast<int>(result.size()),
+                                    SQLITE_TRANSIENT);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -385,12 +446,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(State** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // ===========================================================================
@@ -606,29 +661,33 @@ template <double (*Func)(const std::vector<double>&, const std::vector<double>&)
 class TwoColumnAggregate {
 public:
     static void xStep(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
-            sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->xs.push_back(sqlite3_value_double(argv[0]));
-        state->ys.push_back(sqlite3_value_double(argv[1]));
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
+                sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->xs.push_back(sqlite3_value_double(argv[0]));
+            state->ys.push_back(sqlite3_value_double(argv[1]));
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<TwoColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<TwoColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        double result = Func((*pp)->xs, (*pp)->ys);
-        cleanupState(pp);
-        if (std::isnan(result) || std::isinf(result)) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_double(ctx, result);
-        }
+        invoke_guarded(ctx, [&] {
+            double result = Func((*pp)->xs, (*pp)->ys);
+            if (std::isnan(result) || std::isinf(result)) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_double(ctx, result);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -653,12 +712,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(TwoColumnState** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // --- C variant: returns JSON text ---
@@ -667,31 +720,35 @@ template <std::string (*Func)(const std::vector<double>&, const std::vector<doub
 class TwoColumnAggregateText {
 public:
     static void xStep(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
-            sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->xs.push_back(sqlite3_value_double(argv[0]));
-        state->ys.push_back(sqlite3_value_double(argv[1]));
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
+                sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->xs.push_back(sqlite3_value_double(argv[0]));
+            state->ys.push_back(sqlite3_value_double(argv[1]));
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<TwoColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<TwoColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        std::string result = Func((*pp)->xs, (*pp)->ys);
-        cleanupState(pp);
-        if (result.empty()) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_text(ctx, result.c_str(),
-                                static_cast<int>(result.size()),
-                                SQLITE_TRANSIENT);
-        }
+        invoke_guarded(ctx, [&] {
+            std::string result = Func((*pp)->xs, (*pp)->ys);
+            if (result.empty()) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_text(ctx, result.c_str(),
+                                    static_cast<int>(result.size()),
+                                    SQLITE_TRANSIENT);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -716,12 +773,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(TwoColumnState** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // --- C variant: with extra parameter(s), returns double ---
@@ -743,38 +794,42 @@ public:
     using State = TwoColumnParamState<NParams>;
 
     static void xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
-            sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->xs.push_back(sqlite3_value_double(argv[0]));
-        state->ys.push_back(sqlite3_value_double(argv[1]));
-        if (!state->params_set) {
-            for (std::size_t i = 0; i < NParams; ++i) {
-                if (static_cast<int>(i + 2) < argc &&
-                    sqlite3_value_type(argv[i + 2]) != SQLITE_NULL) {
-                    state->params[i] = sqlite3_value_double(argv[i + 2]);
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
+                sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->xs.push_back(sqlite3_value_double(argv[0]));
+            state->ys.push_back(sqlite3_value_double(argv[1]));
+            if (!state->params_set) {
+                for (std::size_t i = 0; i < NParams; ++i) {
+                    if (static_cast<int>(i + 2) < argc &&
+                        sqlite3_value_type(argv[i + 2]) != SQLITE_NULL) {
+                        state->params[i] = sqlite3_value_double(argv[i + 2]);
+                    }
                 }
+                state->params_set = true;
             }
-            state->params_set = true;
-        }
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        double result = Func((*pp)->xs, (*pp)->ys, (*pp)->params);
-        cleanupState(pp);
-        if (std::isnan(result) || std::isinf(result)) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_double(ctx, result);
-        }
+        invoke_guarded(ctx, [&] {
+            double result = Func((*pp)->xs, (*pp)->ys, (*pp)->params);
+            if (std::isnan(result) || std::isinf(result)) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_double(ctx, result);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -799,12 +854,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(State** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // ===========================================================================
@@ -842,18 +891,20 @@ template <std::vector<double> (*Func)(const std::vector<double>&,
 class FullScanWindowFunction {
 public:
     static void xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        bool is_null = (sqlite3_value_type(argv[0]) == SQLITE_NULL);
-        state->nulls.push_back(is_null);
-        state->values.push_back(is_null ? std::numeric_limits<double>::quiet_NaN()
-                                        : sqlite3_value_double(argv[0]));
-        if (!state->param_set && argc > 1 &&
-            sqlite3_value_type(argv[1]) != SQLITE_NULL) {
-            state->param = sqlite3_value_int(argv[1]);
-            state->dparam = sqlite3_value_double(argv[1]);
-            state->param_set = true;
-        }
+        invoke_guarded(ctx, [&] {
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            bool is_null = (sqlite3_value_type(argv[0]) == SQLITE_NULL);
+            state->nulls.push_back(is_null);
+            state->values.push_back(is_null ? std::numeric_limits<double>::quiet_NaN()
+                                            : sqlite3_value_double(argv[0]));
+            if (!state->param_set && argc > 1 &&
+                sqlite3_value_type(argv[1]) != SQLITE_NULL) {
+                state->param = sqlite3_value_int(argv[1]);
+                state->dparam = sqlite3_value_double(argv[1]);
+                state->param_set = true;
+            }
+        });
     }
 
     static void xInverse(sqlite3_context* ctx, int /*argc*/, sqlite3_value** /*argv*/) {
@@ -863,47 +914,51 @@ public:
     static void xValue(sqlite3_context* ctx) {
         auto* state = getOrCreateState(ctx);
         if (!state) { sqlite3_result_null(ctx); return; }
-        if (!state->computed) {
-            state->results = Func(state->values, state->nulls, state->param);
-            state->computed = true;
-            state->result_idx = 0;
-        }
-        if (state->result_idx < state->results.size()) {
-            double r = state->results[state->result_idx];
-            state->result_idx++;
-            if (std::isnan(r)) {
-                sqlite3_result_null(ctx);
-            } else {
-                sqlite3_result_double(ctx, r);
+        invoke_guarded(ctx, [&] {
+            if (!state->computed) {
+                state->results = Func(state->values, state->nulls, state->param);
+                state->computed = true;
+                state->result_idx = 0;
             }
-        } else {
-            sqlite3_result_null(ctx);
-        }
+            if (state->result_idx < state->results.size()) {
+                double r = state->results[state->result_idx];
+                state->result_idx++;
+                if (std::isnan(r)) {
+                    sqlite3_result_null(ctx);
+                } else {
+                    sqlite3_result_double(ctx, r);
+                }
+            } else {
+                sqlite3_result_null(ctx);
+            }
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<WindowState**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<WindowState> state_guard(pp);
         if (!pp || !*pp) {
             sqlite3_result_null(ctx);
             return;
         }
-        if (!(*pp)->computed) {
-            (*pp)->results = Func((*pp)->values, (*pp)->nulls, (*pp)->param);
-            (*pp)->computed = true;
-        }
-        if ((*pp)->result_idx < (*pp)->results.size()) {
-            double r = (*pp)->results[(*pp)->result_idx];
-            if (std::isnan(r)) {
-                sqlite3_result_null(ctx);
-            } else {
-                sqlite3_result_double(ctx, r);
+        invoke_guarded(ctx, [&] {
+            if (!(*pp)->computed) {
+                (*pp)->results = Func((*pp)->values, (*pp)->nulls, (*pp)->param);
+                (*pp)->computed = true;
             }
-        } else {
-            sqlite3_result_null(ctx);
-        }
-        delete *pp;
-        *pp = nullptr;
+            if ((*pp)->result_idx < (*pp)->results.size()) {
+                double r = (*pp)->results[(*pp)->result_idx];
+                if (std::isnan(r)) {
+                    sqlite3_result_null(ctx);
+                } else {
+                    sqlite3_result_double(ctx, r);
+                }
+            } else {
+                sqlite3_result_null(ctx);
+            }
+        });
     }
 
     // argc=1: no parameter (e.g. stat_rank, stat_fillna_mean)
@@ -1501,29 +1556,33 @@ template <std::string (*Func)(const std::vector<double>&)>
 class SingleColumnAggregateText {
 public:
     static void xStep(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-        if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
-        auto* state = getOrCreateState(ctx);
-        if (!state) return;
-        state->values.push_back(sqlite3_value_double(argv[0]));
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->values.push_back(sqlite3_value_double(argv[0]));
+        });
     }
 
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<SingleColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<SingleColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
-            cleanupState(pp);
             return;
         }
-        std::string result = Func((*pp)->values);
-        cleanupState(pp);
-        if (result.empty()) {
-            sqlite3_result_null(ctx);
-        } else {
-            sqlite3_result_text(ctx, result.c_str(),
-                                static_cast<int>(result.size()),
-                                SQLITE_TRANSIENT);
-        }
+        invoke_guarded(ctx, [&] {
+            std::string result = Func((*pp)->values);
+            if (result.empty()) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_text(ctx, result.c_str(),
+                                    static_cast<int>(result.size()),
+                                    SQLITE_TRANSIENT);
+            }
+        });
     }
 
     static int register_func(sqlite3* db, const char* name) {
@@ -1548,12 +1607,6 @@ private:
         return *pp;
     }
 
-    static void cleanupState(SingleColumnState** pp) {
-        if (pp && *pp) {
-            delete *pp;
-            *pp = nullptr;
-        }
-    }
 };
 
 // ===========================================================================
@@ -1564,21 +1617,51 @@ private:
 // ===========================================================================
 
 // Generic scalar registration helper (implemented per-function via lambdas)
-static int register_scalar(sqlite3* db, const char* name, int nArgs,
-                           void (*xFunc)(sqlite3_context*, int, sqlite3_value**)) {
+/**
+ * @brief スカラー関数の実装を invoke_guarded 経由で呼び出すスタブ
+ *
+ * 実装を非型テンプレート引数として受け取るため, ガードを外した状態で
+ * 登録することが構造的にできない.
+ *
+ * @tparam Fn 実際のスカラー関数の実装
+ */
+template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
+static void guarded_scalar(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
+    invoke_guarded(ctx, [&] { Fn(ctx, argc, argv); });
+}
+
+/**
+ * @brief スカラー関数を登録する(結果が引数のみで決まる関数用)
+ *
+ * @tparam Fn 実装. 常に例外ガードで包まれる
+ * @param db 対象のデータベース接続
+ * @param name SQL 上の関数名
+ * @param nArgs 引数の個数(可変長は -1)
+ * @return SQLite の結果コード
+ */
+template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
+static int register_scalar(sqlite3* db, const char* name, int nArgs) {
     return sqlite3_create_function_v2(
         db, name, nArgs,
         SQLITE_UTF8 | SQLITE_DETERMINISTIC,
-        nullptr, xFunc, nullptr, nullptr, nullptr);
+        nullptr, guarded_scalar<Fn>, nullptr, nullptr, nullptr);
 }
 
-// Non-deterministic variant (for random functions)
-static int register_scalar_nd(sqlite3* db, const char* name, int nArgs,
-                              void (*xFunc)(sqlite3_context*, int, sqlite3_value**)) {
+/**
+ * @brief 非決定的なスカラー関数を登録する(乱数を使う関数用)
+ *
+ * @tparam Fn 実装. 常に例外ガードで包まれる
+ * @param db 対象のデータベース接続
+ * @param name SQL 上の関数名
+ * @param nArgs 引数の個数(可変長は -1)
+ * @return SQLite の結果コード
+ */
+template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
+static int register_scalar_nd(sqlite3* db, const char* name, int nArgs) {
     return sqlite3_create_function_v2(
         db, name, nArgs,
         SQLITE_UTF8,
-        nullptr, xFunc, nullptr, nullptr, nullptr);
+        nullptr, guarded_scalar<Fn>, nullptr, nullptr, nullptr);
 }
 
 // Helper: set double result with NaN/Inf → NULL
@@ -1593,6 +1676,25 @@ static void result_double_or_null(sqlite3_context* ctx, double v) {
 // Helper: set int64 result
 static void result_int64(sqlite3_context* ctx, std::int64_t v) {
     sqlite3_result_int64(ctx, v);
+}
+
+/**
+ * @brief 台が非有界な分布の分位点を返す. 有限の分位点が無い場合は NULL
+ *
+ * ポアソン・幾何・負の二項分布は台が上に有界でないため, p = 1 に対応する
+ * 分位点が存在しない. statcpp はこの場合に uint64 の最大値を番兵として
+ * 返すので, SQL 上は NULL に対応付ける(そのまま int64 にキャストすると
+ * 分位点として無意味な -1 になる).
+ *
+ * @param ctx SQLite の関数コンテキスト
+ * @param v statcpp の分位点関数の戻り値
+ */
+static void result_unbounded_quantile(sqlite3_context* ctx, std::uint64_t v) {
+    if (v == std::numeric_limits<std::uint64_t>::max()) {
+        sqlite3_result_null(ctx);
+    } else {
+        sqlite3_result_int64(ctx, static_cast<std::int64_t>(v));
+    }
 }
 
 // Helper: set text result
@@ -2023,49 +2125,53 @@ struct ThreeColumnState {
 };
 
 static void logrank_step(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-    if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
-        sqlite3_value_type(argv[1]) == SQLITE_NULL ||
-        sqlite3_value_type(argv[2]) == SQLITE_NULL) return;
-    auto** pp = static_cast<ThreeColumnState**>(
-        sqlite3_aggregate_context(ctx, sizeof(ThreeColumnState*)));
-    if (!pp) return;
-    if (!*pp) {
-        *pp = new (std::nothrow) ThreeColumnState();
-        if (!*pp) { sqlite3_result_error_nomem(ctx); return; }
-    }
-    (*pp)->c1.push_back(sqlite3_value_double(argv[0])); // time
-    (*pp)->c2.push_back(sqlite3_value_double(argv[1])); // event
-    (*pp)->c3.push_back(sqlite3_value_double(argv[2])); // group
+    invoke_guarded(ctx, [&] {
+        if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
+            sqlite3_value_type(argv[1]) == SQLITE_NULL ||
+            sqlite3_value_type(argv[2]) == SQLITE_NULL) return;
+        auto** pp = static_cast<ThreeColumnState**>(
+            sqlite3_aggregate_context(ctx, sizeof(ThreeColumnState*)));
+        if (!pp) return;
+        if (!*pp) {
+            *pp = new (std::nothrow) ThreeColumnState();
+            if (!*pp) { sqlite3_result_error_nomem(ctx); return; }
+        }
+        (*pp)->c1.push_back(sqlite3_value_double(argv[0])); // time
+        (*pp)->c2.push_back(sqlite3_value_double(argv[1])); // event
+        (*pp)->c3.push_back(sqlite3_value_double(argv[2])); // group
+    });
 }
 
 static void logrank_final(sqlite3_context* ctx) {
     auto** pp = static_cast<ThreeColumnState**>(
         sqlite3_aggregate_context(ctx, 0));
+    // logrank_final の途中で例外が送出されてもステートを解放する
+    AggregateStateGuard<ThreeColumnState> state_guard(pp);
     if (!pp || !*pp || (*pp)->c1.empty()) {
         sqlite3_result_null(ctx);
-        if (pp && *pp) { delete *pp; *pp = nullptr; }
         return;
     }
-    auto* st = *pp;
-    // Split by group (0 vs non-0)
-    std::vector<double> t1, t2;
-    std::vector<bool> e1, e2;
-    for (std::size_t i = 0; i < st->c1.size(); ++i) {
-        if (st->c3[i] == 0.0) {
-            t1.push_back(st->c1[i]);
-            e1.push_back(st->c2[i] != 0.0);
-        } else {
-            t2.push_back(st->c1[i]);
-            e2.push_back(st->c2[i] != 0.0);
+    invoke_guarded(ctx, [&] {
+        auto* st = *pp;
+        // Split by group (0 vs non-0)
+        std::vector<double> t1, t2;
+        std::vector<bool> e1, e2;
+        for (std::size_t i = 0; i < st->c1.size(); ++i) {
+            if (st->c3[i] == 0.0) {
+                t1.push_back(st->c1[i]);
+                e1.push_back(st->c2[i] != 0.0);
+            } else {
+                t2.push_back(st->c1[i]);
+                e2.push_back(st->c2[i] != 0.0);
+            }
         }
-    }
-    delete st; *pp = nullptr;
-    if (t1.empty() || t2.empty()) { sqlite3_result_null(ctx); return; }
-    auto r = statcpp::logrank_test(t1, e1, t2, e2);
-    std::string s = "{\"statistic\":" + json_double(r.statistic)
-                  + ",\"p_value\":" + json_double(r.p_value)
-                  + ",\"df\":" + std::to_string(r.df) + "}";
-    sqlite3_result_text(ctx, s.c_str(), static_cast<int>(s.size()), SQLITE_TRANSIENT);
+        if (t1.empty() || t2.empty()) { sqlite3_result_null(ctx); return; }
+        auto r = statcpp::logrank_test(t1, e1, t2, e2);
+        std::string s = "{\"statistic\":" + json_double(r.statistic)
+                      + ",\"p_value\":" + json_double(r.p_value)
+                      + ",\"df\":" + std::to_string(r.df) + "}";
+        sqlite3_result_text(ctx, s.c_str(), static_cast<int>(s.size()), SQLITE_TRANSIENT);
+    });
 }
 
 // ===========================================================================
@@ -2515,7 +2621,7 @@ static void sf_poisson_cdf(sqlite3_context* ctx, int /*argc*/, sqlite3_value** a
 static void sf_poisson_quantile(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double p = sqlite3_value_double(argv[0]);
     double lambda = sqlite3_value_double(argv[1]);
-    result_int64(ctx, static_cast<std::int64_t>(statcpp::poisson_quantile(p, lambda)));
+    result_unbounded_quantile(ctx, statcpp::poisson_quantile(p, lambda));
 }
 static void sf_poisson_rand(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double lambda = sqlite3_value_double(argv[0]);
@@ -2535,7 +2641,7 @@ static void sf_geometric_cdf(sqlite3_context* ctx, int /*argc*/, sqlite3_value**
 static void sf_geometric_quantile(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double prob = sqlite3_value_double(argv[0]);
     double p = sqlite3_value_double(argv[1]);
-    result_int64(ctx, static_cast<std::int64_t>(statcpp::geometric_quantile(prob, p)));
+    result_unbounded_quantile(ctx, statcpp::geometric_quantile(prob, p));
 }
 static void sf_geometric_rand(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double p = sqlite3_value_double(argv[0]);
@@ -2558,7 +2664,7 @@ static void sf_nbinom_quantile(sqlite3_context* ctx, int /*argc*/, sqlite3_value
     double prob = sqlite3_value_double(argv[0]);
     double r = sqlite3_value_double(argv[1]);
     double p = sqlite3_value_double(argv[2]);
-    result_int64(ctx, static_cast<std::int64_t>(statcpp::nbinom_quantile(prob, r, p)));
+    result_unbounded_quantile(ctx, statcpp::nbinom_quantile(prob, r, p));
 }
 static void sf_nbinom_rand(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double r = sqlite3_value_double(argv[0]);
@@ -3055,191 +3161,191 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
     // --- Scalar — tests/helpers (40 functions) ---
 
     // Normal distribution (1-3 args)
-    rc |= register_scalar(db, "stat_normal_pdf", -1, sf_normal_pdf);
-    rc |= register_scalar(db, "stat_normal_cdf", -1, sf_normal_cdf);
-    rc |= register_scalar(db, "stat_normal_quantile", -1, sf_normal_quantile);
-    rc |= register_scalar_nd(db, "stat_normal_rand", -1, sf_normal_rand);
+    rc |= register_scalar<sf_normal_pdf>(db, "stat_normal_pdf", -1);
+    rc |= register_scalar<sf_normal_cdf>(db, "stat_normal_cdf", -1);
+    rc |= register_scalar<sf_normal_quantile>(db, "stat_normal_quantile", -1);
+    rc |= register_scalar_nd<sf_normal_rand>(db, "stat_normal_rand", -1);
 
     // Chi-square distribution (2 args)
-    rc |= register_scalar(db, "stat_chisq_pdf", 2, sf_chisq_pdf);
-    rc |= register_scalar(db, "stat_chisq_cdf", 2, sf_chisq_cdf);
-    rc |= register_scalar(db, "stat_chisq_quantile", 2, sf_chisq_quantile);
-    rc |= register_scalar_nd(db, "stat_chisq_rand", 1, sf_chisq_rand);
+    rc |= register_scalar<sf_chisq_pdf>(db, "stat_chisq_pdf", 2);
+    rc |= register_scalar<sf_chisq_cdf>(db, "stat_chisq_cdf", 2);
+    rc |= register_scalar<sf_chisq_quantile>(db, "stat_chisq_quantile", 2);
+    rc |= register_scalar_nd<sf_chisq_rand>(db, "stat_chisq_rand", 1);
 
     // T distribution (2 args)
-    rc |= register_scalar(db, "stat_t_pdf", 2, sf_t_pdf);
-    rc |= register_scalar(db, "stat_t_cdf", 2, sf_t_cdf);
-    rc |= register_scalar(db, "stat_t_quantile", 2, sf_t_quantile);
-    rc |= register_scalar_nd(db, "stat_t_rand", 1, sf_t_rand);
+    rc |= register_scalar<sf_t_pdf>(db, "stat_t_pdf", 2);
+    rc |= register_scalar<sf_t_cdf>(db, "stat_t_cdf", 2);
+    rc |= register_scalar<sf_t_quantile>(db, "stat_t_quantile", 2);
+    rc |= register_scalar_nd<sf_t_rand>(db, "stat_t_rand", 1);
 
     // F distribution (3 args)
-    rc |= register_scalar(db, "stat_f_pdf", 3, sf_f_pdf);
-    rc |= register_scalar(db, "stat_f_cdf", 3, sf_f_cdf);
-    rc |= register_scalar(db, "stat_f_quantile", 3, sf_f_quantile);
-    rc |= register_scalar_nd(db, "stat_f_rand", 2, sf_f_rand);
+    rc |= register_scalar<sf_f_pdf>(db, "stat_f_pdf", 3);
+    rc |= register_scalar<sf_f_cdf>(db, "stat_f_cdf", 3);
+    rc |= register_scalar<sf_f_quantile>(db, "stat_f_quantile", 3);
+    rc |= register_scalar_nd<sf_f_rand>(db, "stat_f_rand", 2);
 
     // Special functions
-    rc |= register_scalar(db, "stat_betainc", 3, sf_betainc);
-    rc |= register_scalar(db, "stat_betaincinv", 3, sf_betaincinv);
-    rc |= register_scalar(db, "stat_norm_cdf", 1, sf_norm_cdf);
-    rc |= register_scalar(db, "stat_norm_quantile", 1, sf_norm_quantile);
-    rc |= register_scalar(db, "stat_gammainc_lower", 2, sf_gammainc_lower);
-    rc |= register_scalar(db, "stat_gammainc_upper", 2, sf_gammainc_upper);
-    rc |= register_scalar(db, "stat_gammainc_lower_inv", 2, sf_gammainc_lower_inv);
+    rc |= register_scalar<sf_betainc>(db, "stat_betainc", 3);
+    rc |= register_scalar<sf_betaincinv>(db, "stat_betaincinv", 3);
+    rc |= register_scalar<sf_norm_cdf>(db, "stat_norm_cdf", 1);
+    rc |= register_scalar<sf_norm_quantile>(db, "stat_norm_quantile", 1);
+    rc |= register_scalar<sf_gammainc_lower>(db, "stat_gammainc_lower", 2);
+    rc |= register_scalar<sf_gammainc_upper>(db, "stat_gammainc_upper", 2);
+    rc |= register_scalar<sf_gammainc_lower_inv>(db, "stat_gammainc_lower_inv", 2);
 
     // Proportion tests
-    rc |= register_scalar(db, "stat_z_test_prop", 3, sf_z_test_prop);
-    rc |= register_scalar(db, "stat_z_test_prop2", 4, sf_z_test_prop2);
+    rc |= register_scalar<sf_z_test_prop>(db, "stat_z_test_prop", 3);
+    rc |= register_scalar<sf_z_test_prop2>(db, "stat_z_test_prop2", 4);
 
     // Multiple testing corrections
-    rc |= register_scalar(db, "stat_bonferroni", 2, sf_bonferroni);
-    rc |= register_scalar(db, "stat_bh_correction", 3, sf_bh_correction);
-    rc |= register_scalar(db, "stat_holm_correction", 3, sf_holm_correction);
+    rc |= register_scalar<sf_bonferroni>(db, "stat_bonferroni", 2);
+    rc |= register_scalar<sf_bh_correction>(db, "stat_bh_correction", 3);
+    rc |= register_scalar<sf_holm_correction>(db, "stat_holm_correction", 3);
 
     // Categorical tests
-    rc |= register_scalar(db, "stat_fisher_exact", 4, sf_fisher_exact);
-    rc |= register_scalar(db, "stat_odds_ratio", 4, sf_odds_ratio);
-    rc |= register_scalar(db, "stat_relative_risk", 4, sf_relative_risk);
-    rc |= register_scalar(db, "stat_risk_difference", 4, sf_risk_difference);
-    rc |= register_scalar(db, "stat_nnt", 4, sf_nnt);
+    rc |= register_scalar<sf_fisher_exact>(db, "stat_fisher_exact", 4);
+    rc |= register_scalar<sf_odds_ratio>(db, "stat_odds_ratio", 4);
+    rc |= register_scalar<sf_relative_risk>(db, "stat_relative_risk", 4);
+    rc |= register_scalar<sf_risk_difference>(db, "stat_risk_difference", 4);
+    rc |= register_scalar<sf_nnt>(db, "stat_nnt", 4);
 
     // Proportion CIs
-    rc |= register_scalar(db, "stat_ci_prop", -1, sf_ci_prop);
-    rc |= register_scalar(db, "stat_ci_prop_wilson", -1, sf_ci_prop_wilson);
-    rc |= register_scalar(db, "stat_ci_prop_diff", -1, sf_ci_prop_diff);
+    rc |= register_scalar<sf_ci_prop>(db, "stat_ci_prop", -1);
+    rc |= register_scalar<sf_ci_prop_wilson>(db, "stat_ci_prop_wilson", -1);
+    rc |= register_scalar<sf_ci_prop_diff>(db, "stat_ci_prop_diff", -1);
 
     // Model selection
-    rc |= register_scalar(db, "stat_aic", 2, sf_aic);
-    rc |= register_scalar(db, "stat_aicc", 3, sf_aicc);
-    rc |= register_scalar(db, "stat_bic", 3, sf_bic);
+    rc |= register_scalar<sf_aic>(db, "stat_aic", 2);
+    rc |= register_scalar<sf_aicc>(db, "stat_aicc", 3);
+    rc |= register_scalar<sf_bic>(db, "stat_bic", 3);
 
     // Data transformation
-    rc |= register_scalar(db, "stat_boxcox", 2, sf_boxcox);
+    rc |= register_scalar<sf_boxcox>(db, "stat_boxcox", 2);
 
     // --- Scalar — distributions/transforms (83 functions) ---
 
     // Uniform distribution
-    rc |= register_scalar(db, "stat_uniform_pdf", -1, sf_uniform_pdf);
-    rc |= register_scalar(db, "stat_uniform_cdf", -1, sf_uniform_cdf);
-    rc |= register_scalar(db, "stat_uniform_quantile", -1, sf_uniform_quantile);
-    rc |= register_scalar_nd(db, "stat_uniform_rand", -1, sf_uniform_rand);
+    rc |= register_scalar<sf_uniform_pdf>(db, "stat_uniform_pdf", -1);
+    rc |= register_scalar<sf_uniform_cdf>(db, "stat_uniform_cdf", -1);
+    rc |= register_scalar<sf_uniform_quantile>(db, "stat_uniform_quantile", -1);
+    rc |= register_scalar_nd<sf_uniform_rand>(db, "stat_uniform_rand", -1);
 
     // Exponential distribution
-    rc |= register_scalar(db, "stat_exponential_pdf", -1, sf_exponential_pdf);
-    rc |= register_scalar(db, "stat_exponential_cdf", -1, sf_exponential_cdf);
-    rc |= register_scalar(db, "stat_exponential_quantile", -1, sf_exponential_quantile);
-    rc |= register_scalar_nd(db, "stat_exponential_rand", -1, sf_exponential_rand);
+    rc |= register_scalar<sf_exponential_pdf>(db, "stat_exponential_pdf", -1);
+    rc |= register_scalar<sf_exponential_cdf>(db, "stat_exponential_cdf", -1);
+    rc |= register_scalar<sf_exponential_quantile>(db, "stat_exponential_quantile", -1);
+    rc |= register_scalar_nd<sf_exponential_rand>(db, "stat_exponential_rand", -1);
 
     // Gamma distribution
-    rc |= register_scalar(db, "stat_gamma_pdf", 3, sf_gamma_pdf);
-    rc |= register_scalar(db, "stat_gamma_cdf", 3, sf_gamma_cdf);
-    rc |= register_scalar(db, "stat_gamma_quantile", 3, sf_gamma_quantile);
-    rc |= register_scalar_nd(db, "stat_gamma_rand", 2, sf_gamma_rand);
+    rc |= register_scalar<sf_gamma_pdf>(db, "stat_gamma_pdf", 3);
+    rc |= register_scalar<sf_gamma_cdf>(db, "stat_gamma_cdf", 3);
+    rc |= register_scalar<sf_gamma_quantile>(db, "stat_gamma_quantile", 3);
+    rc |= register_scalar_nd<sf_gamma_rand>(db, "stat_gamma_rand", 2);
 
     // Beta distribution
-    rc |= register_scalar(db, "stat_beta_pdf", 3, sf_beta_pdf);
-    rc |= register_scalar(db, "stat_beta_cdf", 3, sf_beta_cdf);
-    rc |= register_scalar(db, "stat_beta_quantile", 3, sf_beta_quantile);
-    rc |= register_scalar_nd(db, "stat_beta_rand", 2, sf_beta_rand);
+    rc |= register_scalar<sf_beta_pdf>(db, "stat_beta_pdf", 3);
+    rc |= register_scalar<sf_beta_cdf>(db, "stat_beta_cdf", 3);
+    rc |= register_scalar<sf_beta_quantile>(db, "stat_beta_quantile", 3);
+    rc |= register_scalar_nd<sf_beta_rand>(db, "stat_beta_rand", 2);
 
     // Log-normal distribution
-    rc |= register_scalar(db, "stat_lognormal_pdf", -1, sf_lognormal_pdf);
-    rc |= register_scalar(db, "stat_lognormal_cdf", -1, sf_lognormal_cdf);
-    rc |= register_scalar(db, "stat_lognormal_quantile", -1, sf_lognormal_quantile);
-    rc |= register_scalar_nd(db, "stat_lognormal_rand", -1, sf_lognormal_rand);
+    rc |= register_scalar<sf_lognormal_pdf>(db, "stat_lognormal_pdf", -1);
+    rc |= register_scalar<sf_lognormal_cdf>(db, "stat_lognormal_cdf", -1);
+    rc |= register_scalar<sf_lognormal_quantile>(db, "stat_lognormal_quantile", -1);
+    rc |= register_scalar_nd<sf_lognormal_rand>(db, "stat_lognormal_rand", -1);
 
     // Weibull distribution
-    rc |= register_scalar(db, "stat_weibull_pdf", 3, sf_weibull_pdf);
-    rc |= register_scalar(db, "stat_weibull_cdf", 3, sf_weibull_cdf);
-    rc |= register_scalar(db, "stat_weibull_quantile", 3, sf_weibull_quantile);
-    rc |= register_scalar_nd(db, "stat_weibull_rand", 2, sf_weibull_rand);
+    rc |= register_scalar<sf_weibull_pdf>(db, "stat_weibull_pdf", 3);
+    rc |= register_scalar<sf_weibull_cdf>(db, "stat_weibull_cdf", 3);
+    rc |= register_scalar<sf_weibull_quantile>(db, "stat_weibull_quantile", 3);
+    rc |= register_scalar_nd<sf_weibull_rand>(db, "stat_weibull_rand", 2);
 
     // Binomial distribution
-    rc |= register_scalar(db, "stat_binomial_pmf", 3, sf_binomial_pmf);
-    rc |= register_scalar(db, "stat_binomial_cdf", 3, sf_binomial_cdf);
-    rc |= register_scalar(db, "stat_binomial_quantile", 3, sf_binomial_quantile);
-    rc |= register_scalar_nd(db, "stat_binomial_rand", 2, sf_binomial_rand);
+    rc |= register_scalar<sf_binomial_pmf>(db, "stat_binomial_pmf", 3);
+    rc |= register_scalar<sf_binomial_cdf>(db, "stat_binomial_cdf", 3);
+    rc |= register_scalar<sf_binomial_quantile>(db, "stat_binomial_quantile", 3);
+    rc |= register_scalar_nd<sf_binomial_rand>(db, "stat_binomial_rand", 2);
 
     // Poisson distribution
-    rc |= register_scalar(db, "stat_poisson_pmf", 2, sf_poisson_pmf);
-    rc |= register_scalar(db, "stat_poisson_cdf", 2, sf_poisson_cdf);
-    rc |= register_scalar(db, "stat_poisson_quantile", 2, sf_poisson_quantile);
-    rc |= register_scalar_nd(db, "stat_poisson_rand", 1, sf_poisson_rand);
+    rc |= register_scalar<sf_poisson_pmf>(db, "stat_poisson_pmf", 2);
+    rc |= register_scalar<sf_poisson_cdf>(db, "stat_poisson_cdf", 2);
+    rc |= register_scalar<sf_poisson_quantile>(db, "stat_poisson_quantile", 2);
+    rc |= register_scalar_nd<sf_poisson_rand>(db, "stat_poisson_rand", 1);
 
     // Geometric distribution
-    rc |= register_scalar(db, "stat_geometric_pmf", 2, sf_geometric_pmf);
-    rc |= register_scalar(db, "stat_geometric_cdf", 2, sf_geometric_cdf);
-    rc |= register_scalar(db, "stat_geometric_quantile", 2, sf_geometric_quantile);
-    rc |= register_scalar_nd(db, "stat_geometric_rand", 1, sf_geometric_rand);
+    rc |= register_scalar<sf_geometric_pmf>(db, "stat_geometric_pmf", 2);
+    rc |= register_scalar<sf_geometric_cdf>(db, "stat_geometric_cdf", 2);
+    rc |= register_scalar<sf_geometric_quantile>(db, "stat_geometric_quantile", 2);
+    rc |= register_scalar_nd<sf_geometric_rand>(db, "stat_geometric_rand", 1);
 
     // Negative binomial distribution
-    rc |= register_scalar(db, "stat_nbinom_pmf", 3, sf_nbinom_pmf);
-    rc |= register_scalar(db, "stat_nbinom_cdf", 3, sf_nbinom_cdf);
-    rc |= register_scalar(db, "stat_nbinom_quantile", 3, sf_nbinom_quantile);
-    rc |= register_scalar_nd(db, "stat_nbinom_rand", 2, sf_nbinom_rand);
+    rc |= register_scalar<sf_nbinom_pmf>(db, "stat_nbinom_pmf", 3);
+    rc |= register_scalar<sf_nbinom_cdf>(db, "stat_nbinom_cdf", 3);
+    rc |= register_scalar<sf_nbinom_quantile>(db, "stat_nbinom_quantile", 3);
+    rc |= register_scalar_nd<sf_nbinom_rand>(db, "stat_nbinom_rand", 2);
 
     // Hypergeometric distribution
-    rc |= register_scalar(db, "stat_hypergeom_pmf", 4, sf_hypergeom_pmf);
-    rc |= register_scalar(db, "stat_hypergeom_cdf", 4, sf_hypergeom_cdf);
-    rc |= register_scalar(db, "stat_hypergeom_quantile", 4, sf_hypergeom_quantile);
-    rc |= register_scalar_nd(db, "stat_hypergeom_rand", 3, sf_hypergeom_rand);
+    rc |= register_scalar<sf_hypergeom_pmf>(db, "stat_hypergeom_pmf", 4);
+    rc |= register_scalar<sf_hypergeom_cdf>(db, "stat_hypergeom_cdf", 4);
+    rc |= register_scalar<sf_hypergeom_quantile>(db, "stat_hypergeom_quantile", 4);
+    rc |= register_scalar_nd<sf_hypergeom_rand>(db, "stat_hypergeom_rand", 3);
 
     // Bernoulli distribution
-    rc |= register_scalar(db, "stat_bernoulli_pmf", 2, sf_bernoulli_pmf);
-    rc |= register_scalar(db, "stat_bernoulli_cdf", 2, sf_bernoulli_cdf);
-    rc |= register_scalar(db, "stat_bernoulli_quantile", 2, sf_bernoulli_quantile);
-    rc |= register_scalar_nd(db, "stat_bernoulli_rand", 1, sf_bernoulli_rand);
+    rc |= register_scalar<sf_bernoulli_pmf>(db, "stat_bernoulli_pmf", 2);
+    rc |= register_scalar<sf_bernoulli_cdf>(db, "stat_bernoulli_cdf", 2);
+    rc |= register_scalar<sf_bernoulli_quantile>(db, "stat_bernoulli_quantile", 2);
+    rc |= register_scalar_nd<sf_bernoulli_rand>(db, "stat_bernoulli_rand", 1);
 
     // Discrete uniform distribution
-    rc |= register_scalar(db, "stat_duniform_pmf", 3, sf_duniform_pmf);
-    rc |= register_scalar(db, "stat_duniform_cdf", 3, sf_duniform_cdf);
-    rc |= register_scalar(db, "stat_duniform_quantile", 3, sf_duniform_quantile);
-    rc |= register_scalar_nd(db, "stat_duniform_rand", 2, sf_duniform_rand);
+    rc |= register_scalar<sf_duniform_pmf>(db, "stat_duniform_pmf", 3);
+    rc |= register_scalar<sf_duniform_cdf>(db, "stat_duniform_cdf", 3);
+    rc |= register_scalar<sf_duniform_quantile>(db, "stat_duniform_quantile", 3);
+    rc |= register_scalar_nd<sf_duniform_rand>(db, "stat_duniform_rand", 2);
 
     // Combinatorics
-    rc |= register_scalar(db, "stat_binomial_coef", 2, sf_binomial_coef);
-    rc |= register_scalar(db, "stat_log_binomial_coef", 2, sf_log_binomial_coef);
-    rc |= register_scalar(db, "stat_log_factorial", 1, sf_log_factorial);
+    rc |= register_scalar<sf_binomial_coef>(db, "stat_binomial_coef", 2);
+    rc |= register_scalar<sf_log_binomial_coef>(db, "stat_log_binomial_coef", 2);
+    rc |= register_scalar<sf_log_factorial>(db, "stat_log_factorial", 1);
 
     // Special functions
-    rc |= register_scalar(db, "stat_lgamma", 1, sf_lgamma);
-    rc |= register_scalar(db, "stat_tgamma", 1, sf_tgamma);
-    rc |= register_scalar(db, "stat_beta_func", 2, sf_beta_func);
-    rc |= register_scalar(db, "stat_lbeta", 2, sf_lbeta);
-    rc |= register_scalar(db, "stat_erf", 1, sf_erf);
-    rc |= register_scalar(db, "stat_erfc", 1, sf_erfc);
+    rc |= register_scalar<sf_lgamma>(db, "stat_lgamma", 1);
+    rc |= register_scalar<sf_tgamma>(db, "stat_tgamma", 1);
+    rc |= register_scalar<sf_beta_func>(db, "stat_beta_func", 2);
+    rc |= register_scalar<sf_lbeta>(db, "stat_lbeta", 2);
+    rc |= register_scalar<sf_erf>(db, "stat_erf", 1);
+    rc |= register_scalar<sf_erfc>(db, "stat_erfc", 1);
 
     // Basic statistics (scalar)
-    rc |= register_scalar(db, "stat_logarithmic_mean", 2, sf_logarithmic_mean);
+    rc |= register_scalar<sf_logarithmic_mean>(db, "stat_logarithmic_mean", 2);
 
     // Effect size corrections/conversions
-    rc |= register_scalar(db, "stat_hedges_j", 1, sf_hedges_j);
-    rc |= register_scalar(db, "stat_t_to_r", 2, sf_t_to_r);
-    rc |= register_scalar(db, "stat_d_to_r", 1, sf_d_to_r);
-    rc |= register_scalar(db, "stat_r_to_d", 1, sf_r_to_d);
-    rc |= register_scalar(db, "stat_eta_squared_ef", 2, sf_eta_squared_ef);
-    rc |= register_scalar(db, "stat_partial_eta_sq", 3, sf_partial_eta_sq);
-    rc |= register_scalar(db, "stat_omega_squared_ef", 4, sf_omega_squared_ef);
-    rc |= register_scalar(db, "stat_cohens_h", 2, sf_cohens_h);
+    rc |= register_scalar<sf_hedges_j>(db, "stat_hedges_j", 1);
+    rc |= register_scalar<sf_t_to_r>(db, "stat_t_to_r", 2);
+    rc |= register_scalar<sf_d_to_r>(db, "stat_d_to_r", 1);
+    rc |= register_scalar<sf_r_to_d>(db, "stat_r_to_d", 1);
+    rc |= register_scalar<sf_eta_squared_ef>(db, "stat_eta_squared_ef", 2);
+    rc |= register_scalar<sf_partial_eta_sq>(db, "stat_partial_eta_sq", 3);
+    rc |= register_scalar<sf_omega_squared_ef>(db, "stat_omega_squared_ef", 4);
+    rc |= register_scalar<sf_cohens_h>(db, "stat_cohens_h", 2);
 
     // Effect size interpretation
-    rc |= register_scalar(db, "stat_interpret_d", 1, sf_interpret_d);
-    rc |= register_scalar(db, "stat_interpret_r", 1, sf_interpret_r);
-    rc |= register_scalar(db, "stat_interpret_eta2", 1, sf_interpret_eta2);
+    rc |= register_scalar<sf_interpret_d>(db, "stat_interpret_d", 1);
+    rc |= register_scalar<sf_interpret_r>(db, "stat_interpret_r", 1);
+    rc |= register_scalar<sf_interpret_eta2>(db, "stat_interpret_eta2", 1);
 
     // Power analysis
-    rc |= register_scalar(db, "stat_power_t1", 3, sf_power_t1);
-    rc |= register_scalar(db, "stat_n_t1", 3, sf_n_t1);
-    rc |= register_scalar(db, "stat_power_t2", 4, sf_power_t2);
-    rc |= register_scalar(db, "stat_n_t2", 3, sf_n_t2);
-    rc |= register_scalar(db, "stat_power_prop", 4, sf_power_prop);
-    rc |= register_scalar(db, "stat_n_prop", 4, sf_n_prop);
+    rc |= register_scalar<sf_power_t1>(db, "stat_power_t1", 3);
+    rc |= register_scalar<sf_n_t1>(db, "stat_n_t1", 3);
+    rc |= register_scalar<sf_power_t2>(db, "stat_power_t2", 4);
+    rc |= register_scalar<sf_n_t2>(db, "stat_n_t2", 3);
+    rc |= register_scalar<sf_power_prop>(db, "stat_power_prop", 4);
+    rc |= register_scalar<sf_n_prop>(db, "stat_n_prop", 4);
 
     // Margin of error / sample size
-    rc |= register_scalar(db, "stat_moe_prop", -1, sf_moe_prop);
-    rc |= register_scalar(db, "stat_moe_prop_worst", -1, sf_moe_prop_worst);
-    rc |= register_scalar(db, "stat_n_moe_prop", -1, sf_n_moe_prop);
-    rc |= register_scalar(db, "stat_n_moe_mean", -1, sf_n_moe_mean);
+    rc |= register_scalar<sf_moe_prop>(db, "stat_moe_prop", -1);
+    rc |= register_scalar<sf_moe_prop_worst>(db, "stat_moe_prop_worst", -1);
+    rc |= register_scalar<sf_n_moe_prop>(db, "stat_n_moe_prop", -1);
+    rc |= register_scalar<sf_n_moe_mean>(db, "stat_n_moe_mean", -1);
 
     return rc == SQLITE_OK ? SQLITE_OK : SQLITE_ERROR;
 }

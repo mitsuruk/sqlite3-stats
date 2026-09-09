@@ -621,3 +621,56 @@ TEST_F(ScalarDistributions, NMoeMean) {
         "SELECT stat_n_moe_mean(1.0, 5.0)");
     EXPECT_GT(result, 0.0);
 }
+
+// =====================================================================
+// 台が非有界な分布の分位点: p = 1.0 は有限の値を持たない
+// =====================================================================
+
+/// @brief 境界値: ポアソン分布の p=1.0 → NULL(有限の分位点なし)
+TEST_F(ScalarDistributions, PoissonQuantileAtOneIsNull) {
+    EXPECT_TRUE(query_is_null(db_, "SELECT stat_poisson_quantile(1.0, 2.5)"));
+}
+
+/// @brief 境界値: 幾何分布の p=1.0 → NULL(有限の分位点なし)
+TEST_F(ScalarDistributions, GeometricQuantileAtOneIsNull) {
+    EXPECT_TRUE(query_is_null(db_, "SELECT stat_geometric_quantile(1.0, 0.3)"));
+}
+
+/// @brief 境界値: 負の二項分布の p=1.0 → NULL(有限の分位点なし)
+TEST_F(ScalarDistributions, NbinomQuantileAtOneIsNull) {
+    EXPECT_TRUE(query_is_null(db_, "SELECT stat_nbinom_quantile(1.0, 5, 0.5)"));
+}
+
+/// @brief 正常系: p<1 は従来どおり有限の分位点を返す(NULL 化の巻き添えがないこと)
+TEST_F(ScalarDistributions, UnboundedQuantilesBelowOneAreFinite) {
+    EXPECT_EQ(query_int(db_, "SELECT stat_poisson_quantile(0.99, 2.5)"), 7);
+    EXPECT_EQ(query_int(db_, "SELECT stat_poisson_quantile(0.5, 2.5)"), 2);
+    EXPECT_EQ(query_int(db_, "SELECT stat_geometric_quantile(0.5, 0.3)"), 1);
+    EXPECT_EQ(query_int(db_, "SELECT stat_nbinom_quantile(0.5, 5, 0.5)"), 4);
+}
+
+/// @brief 境界値: 台が有限な分布は p=1.0 でも最大値を返す(NULL にしない)
+TEST_F(ScalarDistributions, BoundedQuantileAtOneIsNotNull) {
+    EXPECT_EQ(query_int(db_, "SELECT stat_binomial_quantile(1.0, 10, 0.5)"), 10);
+}
+
+// =====================================================================
+// 例外境界: 不正な引数はプロセスを落とさず SQL エラーになる
+//
+// statcpp は引数が不正な場合に std::invalid_argument を送出する.
+// SQLite は C の ABI でコールバックを呼ぶため,例外を捕捉していないと
+// std::terminate に至りテストプロセスごと停止する.
+// 以下のテストが「実行できて値を返すこと」自体がガードの動作確認になる.
+// =====================================================================
+
+/// @brief 異常系: スカラー関数の範囲外引数 → SQL エラー(abort しない)
+TEST_F(ScalarDistributions, InvalidScalarArgumentRaisesSqlError) {
+    std::string msg = query_error(db_, "SELECT stat_poisson_quantile(1.5, 2.5)");
+    EXPECT_NE(msg.find("p must be in"), std::string::npos) << "actual: " << msg;
+}
+
+/// @brief 異常系: 範囲外引数のあとも同じ接続で正常な問い合わせを継続できる
+TEST_F(ScalarDistributions, ConnectionSurvivesInvalidArgument) {
+    query_error(db_, "SELECT stat_poisson_quantile(-1.0, 2.5)");
+    EXPECT_NEAR(query_double(db_, "SELECT stat_normal_cdf(0.0)"), 0.5, 1e-12);
+}

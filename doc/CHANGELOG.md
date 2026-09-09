@@ -6,6 +6,38 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- **An exception from any callback terminated the host process**: `ext_funcs.cpp` contained no
+  exception handling at all. statcpp reports an argument outside a function's domain by throwing
+  `std::invalid_argument`, and SQLite invokes its callbacks across a C ABI, so the exception
+  unwound C frames and reached `std::terminate`. A plain SQL expression was enough to kill any
+  process that had loaded the extension:
+
+  ```text
+  sqlite> SELECT stat_poisson_quantile(1.5, 2.5);
+  libc++abi: terminating due to uncaught exception of type std::invalid_argument
+  ```
+
+  Every callback body now runs through `invoke_guarded()`, which converts an exception into an
+  ordinary SQL error via `sqlite3_result_error()`. The statement fails, the connection stays
+  usable, and the process survives. The guard is applied at the registration boundary rather than
+  at each call site: `register_scalar()` and `register_scalar_nd()` take the implementation as a
+  non-type template parameter and always install a guarded stub, so an unguarded scalar function
+  cannot be registered. The eight aggregate and window templates and `stat_logrank` wrap their
+  `xStep`, `xValue` and `xFinal` bodies directly.
+- **Aggregate state leaked when a computation threw**: each `xFinal` released its heap-allocated
+  state by calling `cleanupState()` on the normal path, which an exception skipped. Release is now
+  handled by the RAII guard `AggregateStateGuard`, so the state is destroyed on every path.
+- **`stat_poisson_quantile()`, `stat_geometric_quantile()` and `stat_nbinom_quantile()` returned
+  `-1` at q = 1.0**: these distributions have unbounded support, so no finite value satisfies
+  q = 1.0. statcpp signals this with the largest representable unsigned value, which the wrapper
+  cast straight to a signed integer. They now return `NULL`. The binomial, hypergeometric and
+  discrete uniform quantiles have bounded support and are unchanged.
+
+  Results for every valid argument are unchanged: all 266 integration examples produce identical
+  output before and after, apart from the functions that draw random numbers.
+
 ### Dependencies
 
 - **statcpp**: v0.3.0 -> v0.4.0. The upgrade changes the value returned by four SQL functions;

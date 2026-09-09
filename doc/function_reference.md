@@ -86,6 +86,20 @@ Some functions require a minimum number of data points. When insufficient data i
 | `stat_population_kurtosis`, `stat_kurtosis` | 4 |
 | Others | 1 |
 
+### Invalid Arguments
+
+Arguments outside the domain a function is defined on -- a probability above 1, a confidence
+level outside `(0, 1)`, a trim proportion of 0.5 or more -- are reported as ordinary SQL errors:
+
+```text
+sqlite> SELECT stat_poisson_quantile(1.5, 2.5);
+Error: stepping, statcpp::poisson_quantile: p must be in [0, 1]
+```
+
+The statement fails and the connection stays usable; the process is never terminated. This holds
+for scalar, aggregate and window functions alike. Insufficient or empty input is not an error --
+those cases return `NULL` as described above.
+
 ### Using with GROUP BY
 
 All aggregate functions can be used with `GROUP BY`.
