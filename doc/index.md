@@ -4,7 +4,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 
 ## Overview
 
-sqlite3StatisticalLibrary is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 524 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
+sqlite3StatisticalLibrary is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
 All 249 functions are verified by 266 integration tests.
 

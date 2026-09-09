@@ -4,7 +4,7 @@
 # This file configures the statcpp header-only statistics library for the project.
 # statcpp is a C++17 header-only library providing comprehensive statistical
 # functions: descriptive statistics, hypothesis testing, regression, ANOVA,
-# distributions, resampling, clustering, and more (524 functions, 31 modules).
+# distributions, resampling, clustering, and more (386 functions, 31 modules).
 #
 # Download directory: ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp
 # Install directory:  ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp/statcpp-install
@@ -27,7 +27,7 @@ message(STATUS "statcpp configuration:")
 # Path to download/install directories
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.3.0")
+set(STATCPP_VERSION "0.4.0")
 set(STATCPP_TAG "v${STATCPP_VERSION}")
 set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 

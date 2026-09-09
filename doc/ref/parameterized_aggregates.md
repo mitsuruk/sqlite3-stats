@@ -338,6 +338,13 @@ Performs the **Lilliefors test** (normality test). Tests whether data follow a n
 
 > **Minimum data count**: 2
 
+> **Range of validity of the p-value**: The p-value comes from the Dallal and Wilkinson (1986)
+> analytic approximation to the null distribution of D. That approximation is published for
+> `p <= 0.10` and calibrated for `n >= 5`. Every conventional significance level (0.10, 0.05,
+> 0.01) falls inside that range, so the decision to reject is reliable. Above 0.10 the value
+> only indicates that the sample is consistent with normality and is often returned as exactly
+> `1`; do not read it as an accurate probability or compare two such values.
+
 ```sql
 -- Lilliefors normality test
 SELECT stat_ks_test(response_time) AS ks_result FROM api_logs;

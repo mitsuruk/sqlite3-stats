@@ -14,7 +14,7 @@ SQLite3 に **249 個の統計関数** を追加するロード可能な拡張�
 
 ## 概要
 
-sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 249 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（524 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
+sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 249 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（386 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
 
 全 249 関数は 266 件の結合テストおよび 388 件の Google Test 自動テストで検証済みです。
 
@@ -262,7 +262,7 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 
 | 用途 | リポジトリ | 説明 |
 | --- | --- | --- |
-| C++ ライブラリ | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 ヘッダーオンリー統計ライブラリ (524 関数) |
+| C++ ライブラリ | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 ヘッダーオンリー統計ライブラリ (386 関数) |
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | UNIX パイプライン向けコマンドラインツール |
 | SQL (SQLite3) | **sqlite3-stats** (このリポジトリ) | SQLite3 ロード可能な拡張機能 (249 関数) |
 
@@ -289,7 +289,7 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 
 このプロジェクトの開発には以下のツールと AI アシスタントを活用しています:
 
-- **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 ヘッダーオンリー統計ライブラリ（524 関数）
+- **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 ヘッダーオンリー統計ライブラリ（386 関数）
 - **Claude Code for VS Code (Opus 4.5/4.6)** — コード生成、リファクタリング、ドキュメント作成
 - **OpenAI ChatGPT 5.2** — ドキュメントレビュー
 - **LM Studio google/gemma-2-27b** — ドキュメントレビュー

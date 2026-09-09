@@ -6,6 +6,44 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Dependencies
+
+- **statcpp**: v0.3.0 -> v0.4.0. The upgrade changes the value returned by four SQL functions;
+  no source change was needed in this library. All 388 Google Test cases and all 266 integration
+  examples still pass.
+  - **`stat_ks_test()`**: The Lilliefors p-value is now computed from the Dallal and Wilkinson
+    (1986) analytic approximation instead of the previous `2 exp(-2 d_adj^2)` form. The old
+    formula understated the p-value badly in the upper range: for `val` 1-10 it returned
+    `0.0970` where the correct value is `1`. Samples that are consistent with normality are no
+    longer reported near the 0.05 threshold. Decisions at p <= 0.10 are unaffected in direction.
+  - **`stat_shapiro_wilk()`**: For a sample with W at or extremely close to 1, the upstream
+    sentinel used to yield p = 0.00135 -- rejecting normality for perfectly normal data. It now
+    yields p -> 1. Ordinary samples are unaffected.
+  - **`stat_norm_cdf()` / `stat_normal_cdf()`**: Evaluated through `erfc` instead of
+    `0.5 (1 + erf(x / sqrt(2)))`, which cancelled catastrophically in the left tail. The old form
+    lost all significance below x = -5.8 and underflowed to exactly 0 below x = -8.33;
+    `stat_norm_cdf(-9.0)` returned `0.0` and now returns `1.1285884059538e-19`. Values near the
+    centre move by at most one or two units in the last place.
+  - **Upper-tail p-values** of `stat_z_test()`, `stat_z_test_prop()`, `stat_z_test_prop2()`,
+    `stat_mann_whitney()`, `stat_wilcoxon()` and the power functions are now formed with the
+    survival function rather than by subtracting the CDF from 1, so they stay accurate far into
+    the tail. In the ordinary range the change is at the last digit.
+  - **`stat_poisson_quantile()` / `stat_nbinom_quantile()` at p = 1.0**: These have unbounded
+    support, so there is no finite quantile. Upstream previously cast an infinite value to an
+    unsigned integer, which is undefined behaviour; it now returns the largest representable
+    value. Through the SQL wrapper this surfaces as `-1` rather than the former indeterminate
+    figure (`-1000001` on this platform).
+
+### Documentation
+
+- **`doc/ref/parameterized_aggregates.md` / `-ja.md`**: Documented the range of validity of the
+  `stat_ks_test()` p-value -- the underlying approximation is published for p <= 0.10, so a value
+  above that (frequently exactly 1) indicates consistency with normality rather than an accurate
+  probability.
+- **`cmake/statcpp.cmake`, `README.md`, `README-ja.md`, `doc/index.md`**: Corrected the statcpp
+  function count from 524 to 386, matching the count published upstream in statcpp 0.4.0. The 249
+  SQL functions this extension exposes are unchanged.
+
 ### Added
 
 - **Windows (MSVC) support**: The extension now builds and runs on Windows with MSVC (Visual Studio 2022+).

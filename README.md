@@ -14,7 +14,7 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 
 ## Overview
 
-sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 524 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
+sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
 All 249 functions are verified by 266 integration tests and 388 Google Test automated tests.
 
@@ -262,7 +262,7 @@ sqlite3-stats is part of the **statcpp family**. Choose the one that fits your u
 
 | Use case | Repository | Description |
 | --- | --- | --- |
-| C++ library | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 header-only statistics library (524 functions) |
+| C++ library | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 header-only statistics library (386 functions) |
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | Command-line interface for UNIX pipelines |
 | SQL (SQLite3) | **sqlite3-stats** (this repo) | SQLite3 loadable extension (249 functions) |
 
@@ -289,7 +289,7 @@ This project is licensed under the MIT License.
 
 This project uses the following tools and AI assistants:
 
-- **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 header-only statistics library (524 functions)
+- **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 header-only statistics library (386 functions)
 - **Claude Code for VS Code (Opus 4.5/4.6)** — Code generation, refactoring, documentation
 - **OpenAI ChatGPT 5.2** — Documentation review
 - **LM Studio google/gemma-2-27b** — Documentation review
