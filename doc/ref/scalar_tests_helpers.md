@@ -133,21 +133,34 @@ SELECT stat_z_test_prop2(45, 100, 55, 120);
 
 | Function | Syntax | Description |
 |---|---|---|
-| `stat_bonferroni` | `stat_bonferroni(p, m)` | Bonferroni correction (p × m) |
-| `stat_bh_correction` | `stat_bh_correction(p, rank, total)` | Benjamini-Hochberg correction |
-| `stat_holm_correction` | `stat_holm_correction(p, rank, total)` | Holm correction |
+| `stat_bonferroni` | `stat_bonferroni(p, m)` | Bonferroni correction (p × m, clamped at 1.0) |
+
+Adjusts a single p-value when the number of tests `m` is known.
 
 ```sql
 -- Bonferroni: adjust p-value by the number of tests
 SELECT stat_bonferroni(0.01, 10);  -- → 0.1
+```
 
--- BH correction: used in combination with window functions
+### On Benjamini-Hochberg and Holm corrections
+
+**BH and Holm corrections are not provided as scalar functions.**
+
+Both require inspecting the **entire set of p-values to enforce monotonicity**
+before an adjusted value can be determined, which a scalar function evaluating
+one row at a time cannot express. Passing only a rank as an argument yields
+values that disagree with R's `p.adjust()`.
+
+Use the window function forms instead.
+See [Window Functions — Multiple Testing Corrections](window_functions.md#multiple-testing-corrections).
+
+```sql
+-- Correct a whole set of p-values at once
 SELECT p_value,
-       stat_bh_correction(p_value,
-           ROW_NUMBER() OVER (ORDER BY p_value),
-           COUNT(*) OVER ()) AS bh_adjusted
-FROM test_results
-ORDER BY p_value;
+       stat_bh_correction(p_value) OVER (
+           ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS bh_adjusted
+FROM test_results;
 ```
 
 ---

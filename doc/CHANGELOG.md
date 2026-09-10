@@ -8,6 +8,42 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **`stat_bh_correction` and `stat_holm_correction` returned incorrect adjusted p-values**: both
+  reimplemented the correction formula locally instead of delegating to statcpp, and omitted the
+  monotonicity step that both procedures require. BH takes a cumulative minimum over p-values in
+  descending order and Holm a cumulative maximum in ascending order; the per-row formulas
+  `min(p * total / rank, 1)` and `min(p * (total - rank + 1), 1)` cannot express either, because
+  an adjusted value depends on the other p-values in the set. For `p = (0.040, 0.041, 0.042)`:
+
+  ```text
+  p        BH (was)   BH (now)   Holm (was)   Holm (now)
+  0.040    0.120      0.042      0.120        0.120
+  0.041    0.0615     0.042      0.082        0.120
+  0.042    0.042      0.042      0.042        0.120
+  ```
+
+  R's `p.adjust()` gives 0.042 for all three under BH and 0.12 under Holm, matching the new
+  column. The Holm error was anti-conservative: the largest p-value was adjusted to 0.042 rather
+  than 0.12, turning a non-significant result into a false positive at α = 0.05.
+
+  Both are now full-scan window functions taking a single argument, delegating to
+  `statcpp::benjamini_hochberg_correction()` and `statcpp::holm_correction()`. The three-argument
+  scalar forms have been **removed**; a caller no longer supplies `rank` and `total`:
+
+  ```sql
+  -- before (removed)
+  SELECT stat_bh_correction(p, ROW_NUMBER() OVER (ORDER BY p), COUNT(*) OVER ()) FROM t;
+
+  -- now
+  SELECT stat_bh_correction(p) OVER (
+      ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+  ) FROM t;
+  ```
+
+  NULL rows are excluded from the correction and stay NULL in the output. `stat_bonferroni(p, m)`
+  was already correct and is unchanged; a one-argument window form `stat_bonferroni(p)` was added
+  for consistency. The total SQL function count is unchanged at 249.
+
 - **An exception from any callback terminated the host process**: `ext_funcs.cpp` contained no
   exception handling at all. statcpp reports an argument outside a function's domain by throwing
   `std::invalid_argument`, and SQLite invokes its callbacks across a C ABI, so the exception

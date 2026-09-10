@@ -468,3 +468,144 @@ TEST_F(WindowFunctions, WinsorizeHasFiniteValues) {
     }
     EXPECT_EQ(finite_count, 10);
 }
+
+// =====================================================================
+// 24-26. stat_bonferroni / stat_bh_correction / stat_holm_correction
+//
+// 多重比較補正. 期待値は R 4.4.2 の p.adjust() の実測値を使用する.
+// 単調性の強制を伴うため, 1行ずつ独立に評価するスカラー形式では
+// 表現できず, 全行を収集するウィンドウ関数として実装している.
+// =====================================================================
+
+/// @brief 補正テスト用の p 値テーブルを作成する
+static void create_pvalue_table(sqlite3* db, const char* name,
+                                 const char* values) {
+    std::string sql = "CREATE TABLE ";
+    sql += name;
+    sql += "(id INTEGER PRIMARY KEY, p REAL)";
+    exec_sql(db, sql.c_str());
+    sql = "INSERT INTO ";
+    sql += name;
+    sql += "(p) VALUES ";
+    sql += values;
+    exec_sql(db, sql.c_str());
+}
+
+/// @brief 補正関数をフルフレームのウィンドウ関数として実行する
+static std::vector<double> run_correction(sqlite3* db, const char* func,
+                                           const char* table) {
+    std::string sql = "SELECT ";
+    sql += func;
+    sql += "(p)";
+    sql += kFullFrame;
+    sql += " FROM ";
+    sql += table;
+    sql += " ORDER BY id";
+    return query_doubles(db, sql.c_str());
+}
+
+/// @brief 回帰: 単調性補正が必要なケース. 旧スカラー実装は 0.12/0.0615/0.042 を
+///        返していたが, R の p.adjust(method="BH") は全て 0.042 である.
+TEST_F(WindowFunctions, BhCorrectionEnforcesMonotonicity) {
+    create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
+    auto r = run_correction(db_, "stat_bh_correction", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    EXPECT_NEAR(r[0], 0.042, 1e-9);
+    EXPECT_NEAR(r[1], 0.042, 1e-9);
+    EXPECT_NEAR(r[2], 0.042, 1e-9);
+}
+
+/// @brief 回帰: 旧スカラー実装は最大p値に 0.042 を返し偽陽性を生んでいたが,
+///        R の p.adjust(method="holm") は全て 0.12 である.
+TEST_F(WindowFunctions, HolmCorrectionEnforcesMonotonicity) {
+    create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
+    auto r = run_correction(db_, "stat_holm_correction", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    EXPECT_NEAR(r[0], 0.12, 1e-9);
+    EXPECT_NEAR(r[1], 0.12, 1e-9);
+    EXPECT_NEAR(r[2], 0.12, 1e-9);
+}
+
+/// @brief 正常系: BH補正が R の p.adjust(c(0.001,0.5,0.9),"BH") と一致する
+TEST_F(WindowFunctions, BhCorrectionMatchesR) {
+    create_pvalue_table(db_, "pv", "(0.001),(0.5),(0.9)");
+    auto r = run_correction(db_, "stat_bh_correction", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    EXPECT_NEAR(r[0], 0.003, 1e-9);
+    EXPECT_NEAR(r[1], 0.75, 1e-9);
+    EXPECT_NEAR(r[2], 0.90, 1e-9);
+}
+
+/// @brief 正常系: Holm補正が R の p.adjust(c(0.001,0.5,0.9),"holm") と一致する
+TEST_F(WindowFunctions, HolmCorrectionMatchesR) {
+    create_pvalue_table(db_, "pv", "(0.001),(0.5),(0.9)");
+    auto r = run_correction(db_, "stat_holm_correction", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    EXPECT_NEAR(r[0], 0.003, 1e-9);
+    EXPECT_NEAR(r[1], 1.0, 1e-9);
+    EXPECT_NEAR(r[2], 1.0, 1e-9);
+}
+
+/// @brief 正常系: Bonferroni補正(ウィンドウ版)が R と一致する
+TEST_F(WindowFunctions, BonferroniWindowMatchesR) {
+    create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
+    auto r = run_correction(db_, "stat_bonferroni", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    EXPECT_NEAR(r[0], 0.120, 1e-9);
+    EXPECT_NEAR(r[1], 0.123, 1e-9);
+    EXPECT_NEAR(r[2], 0.126, 1e-9);
+}
+
+/// @brief 正常系: 1.0 で打ち切られる(Bonferroni, R と一致)
+TEST_F(WindowFunctions, BonferroniWindowClampsAtOne) {
+    create_pvalue_table(db_, "pv", "(0.5),(0.6),(0.7)");
+    auto r = run_correction(db_, "stat_bonferroni", "pv");
+    ASSERT_EQ(r.size(), 3u);
+    for (const auto& v : r) EXPECT_NEAR(v, 1.0, 1e-9);
+}
+
+/// @brief 単調性: BH/Holm ともに p 値の順序と補正値の順序が一致する
+TEST_F(WindowFunctions, CorrectionsAreMonotone) {
+    create_pvalue_table(db_, "pv",
+                        "(0.001),(0.008),(0.039),(0.041),(0.042),(0.6),(0.99)");
+    for (const char* func : {"stat_bh_correction", "stat_holm_correction"}) {
+        auto r = run_correction(db_, func, "pv");
+        ASSERT_EQ(r.size(), 7u) << func;
+        // 入力を昇順で投入しているため, 補正値も非減少でなければならない
+        for (std::size_t i = 1; i < r.size(); ++i) {
+            EXPECT_LE(r[i - 1], r[i] + 1e-12)
+                << func << ": index " << i << " で単調性が崩れている";
+        }
+    }
+}
+
+/// @brief 境界値: 単一行では補正されず元の p 値がそのまま返る
+TEST_F(WindowFunctions, CorrectionSingleRowIsUnchanged) {
+    create_pvalue_table(db_, "pv", "(0.03)");
+    for (const char* func : {"stat_bonferroni", "stat_bh_correction",
+                             "stat_holm_correction"}) {
+        auto r = run_correction(db_, func, "pv");
+        ASSERT_EQ(r.size(), 1u) << func;
+        EXPECT_NEAR(r[0], 0.03, 1e-9) << func;
+    }
+}
+
+/// @brief 異常系: NULL 行は NULL のまま残り, 補正の母数からも除外される
+TEST_F(WindowFunctions, CorrectionPreservesNulls) {
+    create_pvalue_table(db_, "pv", "(0.001),(NULL),(0.5),(0.9)");
+    auto r = run_correction(db_, "stat_bh_correction", "pv");
+    ASSERT_EQ(r.size(), 4u);
+    EXPECT_TRUE(std::isnan(r[1])) << "NULL 行は NULL を返すべき";
+    // NULL を除いた 3 件で補正されるため, NULL 無しの場合と同じ値になる
+    EXPECT_NEAR(r[0], 0.003, 1e-9);
+    EXPECT_NEAR(r[2], 0.75, 1e-9);
+    EXPECT_NEAR(r[3], 0.90, 1e-9);
+}
+
+/// @brief 異常系: 全行 NULL の場合は全行 NULL を返す
+TEST_F(WindowFunctions, CorrectionAllNullsReturnsNull) {
+    create_pvalue_table(db_, "pv", "(NULL),(NULL)");
+    auto r = run_correction(db_, "stat_bh_correction", "pv");
+    ASSERT_EQ(r.size(), 2u);
+    for (const auto& v : r) EXPECT_TRUE(std::isnan(v));
+}

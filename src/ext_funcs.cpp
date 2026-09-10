@@ -1314,6 +1314,57 @@ static std::vector<double> wf_rank(const std::vector<double>& values,
     return result;
 }
 
+// --- Multiple testing corrections ---
+//
+// 多重比較補正は p 値集合全体を見ないと補正値が決まらない(単調性の強制が必要).
+// そのため 1 行ずつ独立に評価されるスカラー関数では原理的に表現できず,
+// 全行を収集するウィンドウ関数として実装し statcpp に委譲する.
+// NULL 行は補正の対象から除外し, 出力でも NULL を維持する.
+
+/**
+ * @brief 補正済み p 値を元の行位置へ写像する共通処理
+ * @param values 収集した値(NULL 位置は NaN)
+ * @param nulls 各行が NULL かどうか
+ * @param correction statcpp の補正関数
+ * @return 行順に並んだ補正済み p 値(NULL 位置は NaN)
+ */
+static std::vector<double> apply_pvalue_correction(
+    const std::vector<double>& values,
+    const std::vector<bool>& nulls,
+    std::vector<double> (*correction)(const std::vector<double>&)) {
+    auto valid = extract_valid(values, nulls);
+    std::vector<double> result(values.size(), std::numeric_limits<double>::quiet_NaN());
+    if (valid.empty()) return result;
+    auto adjusted = correction(valid);
+    // Map back to original positions (wf_rank と同一パターン)
+    std::size_t vi = 0;
+    for (std::size_t i = 0; i < values.size(); ++i) {
+        if (!nulls[i]) {
+            result[i] = adjusted[vi++];
+        }
+    }
+    return result;
+}
+
+static std::vector<double> wf_bonferroni(const std::vector<double>& values,
+                                          const std::vector<bool>& nulls,
+                                          int /*param*/) {
+    return apply_pvalue_correction(values, nulls, statcpp::bonferroni_correction);
+}
+
+static std::vector<double> wf_bh_correction(const std::vector<double>& values,
+                                             const std::vector<bool>& nulls,
+                                             int /*param*/) {
+    return apply_pvalue_correction(values, nulls,
+                                   statcpp::benjamini_hochberg_correction);
+}
+
+static std::vector<double> wf_holm_correction(const std::vector<double>& values,
+                                               const std::vector<bool>& nulls,
+                                               int /*param*/) {
+    return apply_pvalue_correction(values, nulls, statcpp::holm_correction);
+}
+
 // --- fillna functions ---
 
 static std::vector<double> wf_fillna_mean(const std::vector<double>& values,
@@ -2305,30 +2356,17 @@ static void sf_z_test_prop2(sqlite3_context* ctx, int /*argc*/, sqlite3_value** 
     result_text(ctx, s);
 }
 
-// --- P6-26..28: Multiple testing corrections (scalar: takes comma-separated p-values as JSON) ---
-// These take individual p-value and correction count, returning adjusted p-value
-// For simplicity: stat_bonferroni(p, n) = min(p*n, 1.0)
+// --- P6-26: Bonferroni correction (scalar form) ---
+// 検定数 m が既知の場合に単一の p 値を補正する. min(p*m, 1) は statcpp の
+// bonferroni_correction と同一の式であり, 単調性補正を要しないためスカラーで表現できる.
+// p 値集合全体を渡す場合は, ウィンドウ関数版 stat_bonferroni(p) OVER () を使う.
+//
+// BH / Holm 補正は単調性の強制に p 値集合全体を必要とするため, スカラー形式では
+// 提供せず, ウィンドウ関数 stat_bh_correction / stat_holm_correction のみを提供する.
 static void sf_bonferroni(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double p = sqlite3_value_double(argv[0]);
-    int n = sqlite3_value_int(argv[1]);
-    double adj = std::min(p * n, 1.0);
-    result_double_or_null(ctx, adj);
-}
-static void sf_bh_correction(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-    // BH: stat_bh_correction(p, rank, total) = min(p * total / rank, 1.0)
-    double p = sqlite3_value_double(argv[0]);
-    int rank = sqlite3_value_int(argv[1]);
-    int total = sqlite3_value_int(argv[2]);
-    if (rank <= 0) { sqlite3_result_null(ctx); return; }
-    double adj = std::min(p * static_cast<double>(total) / static_cast<double>(rank), 1.0);
-    result_double_or_null(ctx, adj);
-}
-static void sf_holm_correction(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
-    // Holm: stat_holm_correction(p, rank, total) = min(p * (total - rank + 1), 1.0)
-    double p = sqlite3_value_double(argv[0]);
-    int rank = sqlite3_value_int(argv[1]);
-    int total = sqlite3_value_int(argv[2]);
-    double adj = std::min(p * static_cast<double>(total - rank + 1), 1.0);
+    int m = sqlite3_value_int(argv[1]);
+    double adj = std::min(p * m, 1.0);
     result_double_or_null(ctx, adj);
 }
 
@@ -3099,6 +3137,11 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
     // Robust (2-arg: column, percentile)
     rc |= FullScanWindowFunction<wf_winsorize>::register_func_2(db, "stat_winsorize");
 
+    // --- Multiple testing corrections (window: p 値集合全体を補正) ---
+    rc |= FullScanWindowFunction<wf_bonferroni>::register_func_1(db, "stat_bonferroni");
+    rc |= FullScanWindowFunction<wf_bh_correction>::register_func_1(db, "stat_bh_correction");
+    rc |= FullScanWindowFunction<wf_holm_correction>::register_func_1(db, "stat_holm_correction");
+
     // --- Complex aggregates: two-sample / JSON (32 functions) ---
 
     // Multiple result aggregates (single column → JSON)
@@ -3199,8 +3242,6 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
 
     // Multiple testing corrections
     rc |= register_scalar<sf_bonferroni>(db, "stat_bonferroni", 2);
-    rc |= register_scalar<sf_bh_correction>(db, "stat_bh_correction", 3);
-    rc |= register_scalar<sf_holm_correction>(db, "stat_holm_correction", 3);
 
     // Categorical tests
     rc |= register_scalar<sf_fisher_exact>(db, "stat_fisher_exact", 4);

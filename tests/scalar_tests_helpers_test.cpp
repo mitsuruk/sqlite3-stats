@@ -209,7 +209,7 @@ TEST_F(ScalarTestsHelpers, ZTestProp2) {
 }
 
 // =====================================================================
-// 多重比較補正 (3関数)
+// 多重比較補正 (1関数 — BH/Holm はウィンドウ関数へ移動)
 // =====================================================================
 
 /// @brief 正常系: stat_bonferroni(0.01, 5) → 0.05
@@ -218,19 +218,15 @@ TEST_F(ScalarTestsHelpers, Bonferroni) {
     EXPECT_NEAR(result, 0.05, 1e-4);
 }
 
-/// @brief 正常系: stat_bh_correction(0.01, 1, 5) → 0.05
-TEST_F(ScalarTestsHelpers, BhCorrection) {
-    double result = query_double(
-        db_, "SELECT stat_bh_correction(0.01, 1, 5)");
-    EXPECT_NEAR(result, 0.05, 1e-4);
+/// @brief 境界値: stat_bonferroni は 1.0 で打ち切る
+TEST_F(ScalarTestsHelpers, BonferroniClampsAtOne) {
+    double result = query_double(db_, "SELECT stat_bonferroni(0.5, 10)");
+    EXPECT_NEAR(result, 1.0, 1e-9);
 }
 
-/// @brief 正常系: stat_holm_correction(0.01, 1, 5) → 0.05
-TEST_F(ScalarTestsHelpers, HolmCorrection) {
-    double result = query_double(
-        db_, "SELECT stat_holm_correction(0.01, 1, 5)");
-    EXPECT_NEAR(result, 0.05, 1e-4);
-}
+// BH / Holm 補正は単調性の強制に p 値集合全体を必要とするため,
+// スカラー形式では提供しない. ウィンドウ関数版のテストは
+// window_functions_test.cpp を参照.
 
 // =====================================================================
 // Fisher正確検定・リスク (5関数)

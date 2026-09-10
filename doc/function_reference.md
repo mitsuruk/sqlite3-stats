@@ -13,13 +13,13 @@ This reference covers a total of **249 functions**.
 | [Basic Aggregate Functions](ref/basic_aggregates.md) | 24 | Single-column aggregates: `SELECT stat_xxx(col) FROM table` |
 | [Parameterized Aggregate Functions](ref/parameterized_aggregates.md) | 20 | Aggregates with parameters: `SELECT stat_xxx(col, param) FROM table` |
 | [Two-Column Aggregate Functions](ref/two_column_aggregates.md) | 27 | Two-column input aggregates: `SELECT stat_xxx(col1, col2) FROM table` |
-| [Window Functions](ref/window_functions.md) | 23 | Full-scan window functions that return a value per row |
+| [Window Functions](ref/window_functions.md) | 26 | Full-scan window functions that return a value per row |
 | [Complex Aggregate Functions](ref/complex_aggregates.md) | 32 | Aggregate functions returning JSON results, two-sample tests, survival analysis, etc. |
 | [Scalar Functions — Test Helpers](ref/scalar_tests_helpers.md) | 40 | DB-independent: distribution functions, special functions, proportion tests, multiple testing corrections, etc. |
 | [Scalar Functions — Distributions & Transformations](ref/scalar_distributions.md) | 83 | DB-independent: additional distribution functions, effect size conversions, power analysis, etc. |
 
 - **Basic Aggregate Functions through Two-Column Aggregate Functions** (71 functions) are all **aggregate functions** and can be used in any context where SQLite3 standard aggregate functions are available, including `GROUP BY`, `HAVING`, and subqueries.
-- **Window Functions** (23 functions) are implemented as full-scan type and return one value per row.
+- **Window Functions** (26 functions) are implemented as full-scan type and return one value per row.
 - **Complex Aggregate Functions** (32 functions) are **aggregate functions** (including those returning JSON results).
 - **Scalar Functions** (123 functions) compute results solely from their parameters.
 
@@ -203,7 +203,7 @@ GROUP BY category;
 | `stat_minkowski_dist(a, b, p)` | Minkowski distance | REAL | 1 | [Details](ref/two_column_aggregates.md#stat_minkowski_dist) |
 | `stat_chebyshev_dist(a, b)` | Chebyshev distance | REAL | 1 | [Details](ref/two_column_aggregates.md#stat_chebyshev_dist) |
 
-### Window Functions (23 functions)
+### Window Functions (26 functions)
 
 | Function | Description | Return | Details |
 |---|---|---|---|
@@ -230,6 +230,9 @@ GROUP BY category;
 | `stat_outliers_zscore(col)` | Outlier detection (Z-score) | REAL/row | [Details](ref/window_functions.md#stat_outliers_zscore) |
 | `stat_outliers_mzscore(col)` | Outlier detection (modified Z) | REAL/row | [Details](ref/window_functions.md#stat_outliers_mzscore) |
 | `stat_winsorize(col, pct)` | Winsorization | REAL/row | [Details](ref/window_functions.md#stat_winsorize) |
+| `stat_bonferroni(p)` | Bonferroni correction | REAL/row | [Details](ref/window_functions.md#multiple-testing-corrections) |
+| `stat_bh_correction(p)` | Benjamini-Hochberg correction | REAL/row | [Details](ref/window_functions.md#multiple-testing-corrections) |
+| `stat_holm_correction(p)` | Holm correction | REAL/row | [Details](ref/window_functions.md#multiple-testing-corrections) |
 
 ### Complex Aggregate Functions (32 functions)
 
@@ -298,8 +301,6 @@ GROUP BY category;
 | `stat_z_test_prop(x, n, p0)` | One-sample proportion z-test | JSON | [Details](ref/scalar_tests_helpers.md#stat_z_test_prop) |
 | `stat_z_test_prop2(x1, n1, x2, n2)` | Two-sample proportion z-test | JSON | [Details](ref/scalar_tests_helpers.md#stat_z_test_prop2) |
 | `stat_bonferroni(p, m)` | Bonferroni correction | REAL | [Details](ref/scalar_tests_helpers.md#multiple-testing-corrections) |
-| `stat_bh_correction(p, rank, total)` | BH correction | REAL | [Details](ref/scalar_tests_helpers.md#multiple-testing-corrections) |
-| `stat_holm_correction(p, rank, total)` | Holm correction | REAL | [Details](ref/scalar_tests_helpers.md#multiple-testing-corrections) |
 | `stat_fisher_exact(a, b, c, d)` | Fisher's exact test | JSON | [Details](ref/scalar_tests_helpers.md#stat_fisher_exact) |
 | `stat_odds_ratio(a, b, c, d)` | Odds ratio | REAL | [Details](ref/scalar_tests_helpers.md#categorical-analysis-scalar) |
 | `stat_relative_risk(a, b, c, d)` | Relative risk | REAL | [Details](ref/scalar_tests_helpers.md#categorical-analysis-scalar) |

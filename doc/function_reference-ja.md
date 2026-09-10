@@ -11,13 +11,13 @@
 | [基本集約関数](ref/basic_aggregates-ja.md) | 24 | 1カラム集約: `SELECT stat_xxx(col) FROM table` |
 | [パラメータ付き集約関数](ref/parameterized_aggregates-ja.md) | 20 | 引数付き集約: `SELECT stat_xxx(col, param) FROM table` |
 | [2カラム集約関数](ref/two_column_aggregates-ja.md) | 27 | 2列入力集約: `SELECT stat_xxx(col1, col2) FROM table` |
-| [ウィンドウ関数](ref/window_functions-ja.md) | 23 | 行ごとに値を返す全行スキャン型ウィンドウ関数 |
+| [ウィンドウ関数](ref/window_functions-ja.md) | 26 | 行ごとに値を返す全行スキャン型ウィンドウ関数 |
 | [複合集約関数](ref/complex_aggregates-ja.md) | 32 | JSON結果を返す集約関数、2標本検定、生存時間解析等 |
 | [スカラー関数 — 検定補助](ref/scalar_tests_helpers-ja.md) | 40 | DB非依存: 分布関数、特殊関数、比率検定、多重検定補正等 |
 | [スカラー関数 — 分布・変換](ref/scalar_distributions-ja.md) | 83 | DB非依存: 追加分布関数、効果量変換、検出力分析等 |
 
 - **基本集約関数〜2カラム集約関数**（71関数）はすべて**集約関数**であり、`GROUP BY`、`HAVING`、サブクエリなど SQLite3 の標準的な集約関数が使えるすべての文脈で利用可能。
-- **ウィンドウ関数**（23関数）は全行スキャン型として実装されており、各行に対して1つの値を返す。
+- **ウィンドウ関数**（26関数）は全行スキャン型として実装されており、各行に対して1つの値を返す。
 - **複合集約関数**（32関数）は**集約関数**（JSON 結果を返すものを含む）。
 - **スカラー関数**（123関数）はパラメータのみで計算が完結する。
 
@@ -201,7 +201,7 @@ GROUP BY category;
 | `stat_minkowski_dist(a, b, p)` | ミンコフスキー距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_minkowski_dist) |
 | `stat_chebyshev_dist(a, b)` | チェビシェフ距離 | REAL | 1 | [詳細](ref/two_column_aggregates-ja.md#stat_chebyshev_dist) |
 
-### ウィンドウ関数（23関数）
+### ウィンドウ関数（26関数）
 
 | 関数名 | 説明 | 戻り値 | 詳細 |
 |---|---|---|---|
@@ -228,6 +228,9 @@ GROUP BY category;
 | `stat_outliers_zscore(col)` | 外れ値検出（Zスコア） | REAL/行 | [詳細](ref/window_functions-ja.md#stat_outliers_zscore) |
 | `stat_outliers_mzscore(col)` | 外れ値検出（修正Z） | REAL/行 | [詳細](ref/window_functions-ja.md#stat_outliers_mzscore) |
 | `stat_winsorize(col, pct)` | ウィンザライズ | REAL/行 | [詳細](ref/window_functions-ja.md#stat_winsorize) |
+| `stat_bonferroni(p)` | Bonferroni 補正 | REAL/行 | [詳細](ref/window_functions-ja.md#多重比較補正) |
+| `stat_bh_correction(p)` | Benjamini-Hochberg 補正 | REAL/行 | [詳細](ref/window_functions-ja.md#多重比較補正) |
+| `stat_holm_correction(p)` | Holm 補正 | REAL/行 | [詳細](ref/window_functions-ja.md#多重比較補正) |
 
 ### 複合集約関数（32関数）
 
@@ -296,8 +299,6 @@ GROUP BY category;
 | `stat_z_test_prop(x, n, p0)` | 1標本比率 z 検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_z_test_prop) |
 | `stat_z_test_prop2(x1, n1, x2, n2)` | 2標本比率 z 検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_z_test_prop2) |
 | `stat_bonferroni(p, m)` | Bonferroni 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
-| `stat_bh_correction(p, rank, total)` | BH 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
-| `stat_holm_correction(p, rank, total)` | Holm 補正 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#多重検定補正) |
 | `stat_fisher_exact(a, b, c, d)` | Fisher 正確確率検定 | JSON | [詳細](ref/scalar_tests_helpers-ja.md#stat_fisher_exact) |
 | `stat_odds_ratio(a, b, c, d)` | オッズ比 | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |
 | `stat_relative_risk(a, b, c, d)` | 相対リスク | REAL | [詳細](ref/scalar_tests_helpers-ja.md#カテゴリカル分析スカラー) |

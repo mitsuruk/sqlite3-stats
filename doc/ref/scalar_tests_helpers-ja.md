@@ -133,21 +133,33 @@ SELECT stat_z_test_prop2(45, 100, 55, 120);
 
 | 関数 | 構文 | 説明 |
 |---|---|---|
-| `stat_bonferroni` | `stat_bonferroni(p, m)` | Bonferroni 補正（p × m） |
-| `stat_bh_correction` | `stat_bh_correction(p, rank, total)` | Benjamini-Hochberg 補正 |
-| `stat_holm_correction` | `stat_holm_correction(p, rank, total)` | Holm 補正 |
+| `stat_bonferroni` | `stat_bonferroni(p, m)` | Bonferroni 補正（p × m、1.0 で打ち切り） |
+
+検定数 `m` が既知の場合に単一の p 値を補正する。
 
 ```sql
 -- Bonferroni: p値を検定数で補正
 SELECT stat_bonferroni(0.01, 10);  -- → 0.1
+```
 
--- BH補正: ウィンドウ関数と組み合わせて使用
+### Benjamini-Hochberg 補正・Holm 補正について
+
+**BH 補正と Holm 補正はスカラー関数として提供していない。**
+
+これらは補正値を確定するために **p 値集合全体を参照して単調性を強制する**必要があり、
+1 行ずつ独立に評価されるスカラー関数では原理的に表現できない。
+p 値の順位だけを引数で渡す形式では、R の `p.adjust()` と一致しない値を返してしまう。
+
+ウィンドウ関数版を使用すること。
+[ウィンドウ関数 — 多重比較補正](window_functions-ja.md#多重比較補正) を参照。
+
+```sql
+-- p 値の集合をまとめて補正する
 SELECT p_value,
-       stat_bh_correction(p_value,
-           ROW_NUMBER() OVER (ORDER BY p_value),
-           COUNT(*) OVER ()) AS bh_adjusted
-FROM test_results
-ORDER BY p_value;
+       stat_bh_correction(p_value) OVER (
+           ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS bh_adjusted
+FROM test_results;
 ```
 
 ---

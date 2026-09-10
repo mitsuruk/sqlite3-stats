@@ -440,3 +440,60 @@ FROM (
 ```
 
 ---
+
+## Multiple Testing Corrections
+
+| Function | Syntax | Description |
+|---|---|---|
+| `stat_bonferroni` | `stat_bonferroni(p)` | Bonferroni correction |
+| `stat_bh_correction` | `stat_bh_correction(p)` | Benjamini-Hochberg (FDR) |
+| `stat_holm_correction` | `stat_holm_correction(p)` | Holm (step-down) |
+
+Takes a column of p-values and returns the multiplicity-adjusted p-value
+**for each row**. Results match R's
+`p.adjust(p, method = "bonferroni" / "BH" / "holm")`.
+
+These are window functions rather than scalar functions because BH and Holm
+**enforce monotonicity across the entire set of p-values**: BH takes a cumulative
+minimum in descending p order, Holm a cumulative maximum in ascending order.
+A scalar function that sees only one row cannot express this.
+
+> **Important**: state the frame explicitly. With `OVER ()`, SQLite treats the frame
+> as invariant, computes the result once and reuses it, so every row receives the
+> first row's value. This applies to all full-scan window functions in this library.
+
+**Syntax**:
+
+```sql
+stat_bh_correction(p) OVER (
+    ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+```
+
+**NULL handling**: NULL rows are excluded from the correction and remain
+NULL in the output.
+
+```sql
+-- Apply FDR control across many test results
+SELECT gene, p_value,
+       stat_bh_correction(p_value) OVER (
+           ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS q_value
+FROM gene_tests
+ORDER BY p_value;
+
+-- Keep only those significant after correction
+SELECT * FROM (
+    SELECT gene, p_value,
+           stat_holm_correction(p_value) OVER (
+               ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+           ) AS p_adj
+    FROM gene_tests
+) WHERE p_adj < 0.05;
+```
+
+To adjust a single p-value when the number of tests is known, use the
+scalar form
+[`stat_bonferroni(p, m)`](scalar_tests_helpers.md#multiple-testing-corrections).
+
+---

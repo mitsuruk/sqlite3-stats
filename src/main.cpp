@@ -1104,12 +1104,22 @@ int main() {
         "\n[168] stat_z_test_prop2(30/100 vs 40/100)");
 
     // Multiple testing
+    // BH / Holm は p 値集合全体で単調性を強制するためウィンドウ関数として提供する.
+    // 期待値は R の p.adjust(c(0.040,0.041,0.042), method=...) と一致する.
     exec_sql(db, "SELECT stat_bonferroni(0.03, 5);",
-        "\n[169] stat_bonferroni(p=0.03, n=5) — min(0.15, 1)");
-    exec_sql(db, "SELECT stat_bh_correction(0.03, 2, 5);",
-        "\n[170] stat_bh_correction(p=0.03, rank=2, total=5)");
-    exec_sql(db, "SELECT stat_holm_correction(0.03, 2, 5);",
-        "\n[171] stat_holm_correction(p=0.03, rank=2, total=5)");
+        "\n[169] stat_bonferroni(p=0.03, m=5) — min(0.15, 1)");
+    exec_sql(db,
+        "WITH pv(id, p) AS (VALUES (1,0.040),(2,0.041),(3,0.042)) "
+        "SELECT p, stat_bh_correction(p) OVER ("
+        "ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
+        ") AS bh FROM pv;",
+        "\n[170] stat_bh_correction — R: 全て 0.042");
+    exec_sql(db,
+        "WITH pv(id, p) AS (VALUES (1,0.040),(2,0.041),(3,0.042)) "
+        "SELECT p, stat_holm_correction(p) OVER ("
+        "ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
+        ") AS holm FROM pv;",
+        "\n[171] stat_holm_correction — R: 全て 0.12");
 
     // Categorical
     exec_sql(db, "SELECT stat_fisher_exact(10, 5, 3, 12);",

@@ -1,4 +1,4 @@
-# ウィンドウ関数（23関数）
+# ウィンドウ関数（26関数）
 
 全行スキャン型のウィンドウ関数。各行に対して1つの値を返す。`GROUP BY` は使用せず、ウィンドウフレーム内で計算を行う。
 
@@ -438,5 +438,58 @@ FROM (
     SELECT stat_winsorize(value, 10) AS w FROM measurements
 );
 ```
+
+---
+
+## 多重比較補正
+
+| 関数 | 構文 | 説明 |
+|---|---|---|
+| `stat_bonferroni` | `stat_bonferroni(p)` | Bonferroni 補正 |
+| `stat_bh_correction` | `stat_bh_correction(p)` | Benjamini-Hochberg 補正 |
+| `stat_holm_correction` | `stat_holm_correction(p)` | Holm 補正 |
+
+p 値の列を受け取り、多重比較補正を施した p 値を**各行に**返す。
+R の `p.adjust(p, method = "bonferroni" / "BH" / "holm")` と一致する。
+
+これらがスカラー関数ではなくウィンドウ関数である理由は、BH 補正と Holm 補正が
+**p 値集合全体を参照して単調性を強制する**ためである。BH は p 値降順に累積 min を、
+Holm は昇順に累積 max を取る。1 行分の情報しか見えないスカラー関数では表現できない。
+
+> **重要**: フレームを明示すること。`OVER ()` と書くと SQLite がフレーム不変と判断して
+> 結果を 1 度だけ計算し全行で使い回すため、先頭行の値が全行に返る。
+> 本ライブラリの全行スキャン型ウィンドウ関数に共通の制約である。
+
+**構文**:
+
+```sql
+stat_bh_correction(p) OVER (
+    ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+)
+```
+
+**NULL の扱い**: NULL 行は補正の母数から除外され、出力でも NULL のまま残る。
+
+```sql
+-- 複数の検定結果をまとめて FDR 制御する
+SELECT gene, p_value,
+       stat_bh_correction(p_value) OVER (
+           ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+       ) AS q_value
+FROM gene_tests
+ORDER BY p_value;
+
+-- 補正後に有意なものだけ抽出する
+SELECT * FROM (
+    SELECT gene, p_value,
+           stat_holm_correction(p_value) OVER (
+               ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING
+           ) AS p_adj
+    FROM gene_tests
+) WHERE p_adj < 0.05;
+```
+
+**検定数が既知で単一の p 値だけを補正したい場合**は、スカラー版
+[`stat_bonferroni(p, m)`](scalar_tests_helpers-ja.md#多重検定補正) を使う。
 
 ---
