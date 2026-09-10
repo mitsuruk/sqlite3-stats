@@ -24,9 +24,9 @@ All 258 functions are verified by 266 integration tests.
 | Basic aggregates | 24 | Single-column: `SELECT stat_xxx(col) FROM t` |
 | Parameterized aggregates | 20 | With parameters: `SELECT stat_xxx(col, param) FROM t` |
 | Two-column aggregates | 27 | Two-column input: `SELECT stat_xxx(col1, col2) FROM t` |
-| Window functions | 23 | Full-scan window functions returning one value per row |
-| Complex aggregates | 32 | JSON-returning aggregates, two-sample tests, survival analysis |
-| Scalar — tests/helpers | 40 | Distribution functions, proportion tests, multiple testing corrections |
+| Window functions | 26 | Full-scan window functions returning one value per row |
+| Complex aggregates | 41 | JSON-returning aggregates, two-sample tests, survival analysis |
+| Scalar — tests/helpers | 38 | Distribution functions, proportion tests, multiple testing corrections |
 | Scalar — distributions | 83 | Continuous/discrete distributions, effect size conversions, power analysis |
 
 ## Quick Start

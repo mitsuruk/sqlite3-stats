@@ -116,9 +116,13 @@ ctest --test-dir build --output-on-failure
 | two_column_aggregates_test.cpp | 27 | 56 |
 | window_functions_test.cpp | 26 | 46 |
 | complex_aggregates_test.cpp | 41 | 80 |
-| scalar_tests_helpers_test.cpp | 37 | 42 |
+| scalar_tests_helpers_test.cpp | 38 | 42 |
 | scalar_distributions_test.cpp | 83 | 90 |
 | **Total** | **258** | **424** |
+
+`stat_bonferroni` is counted under both window functions and scalar test
+helpers, since it has a form of each, so the function column lists 259 entries
+for 258 distinct names.
 
 ### Load the Extension
 
@@ -203,9 +207,9 @@ Full documentation for all 258 functions:
   - [Basic Aggregates (24)](doc/ref/basic_aggregates.md)
   - [Parameterized Aggregates (20)](doc/ref/parameterized_aggregates.md)
   - [Two-Column Aggregates (27)](doc/ref/two_column_aggregates.md)
-  - [Window Functions (23)](doc/ref/window_functions.md)
-  - [Complex Aggregates (32)](doc/ref/complex_aggregates.md)
-  - [Scalar — Tests/Helpers (40)](doc/ref/scalar_tests_helpers.md)
+  - [Window Functions (26)](doc/ref/window_functions.md)
+  - [Complex Aggregates (41)](doc/ref/complex_aggregates.md)
+  - [Scalar — Tests/Helpers (38)](doc/ref/scalar_tests_helpers.md)
   - [Scalar — Distributions/Transforms (83)](doc/ref/scalar_distributions.md)
 
 ## Project Structure
@@ -217,13 +221,13 @@ sqlite3-stats/
 ├── README-ja.md                           # Japanese README
 ├── tests/
 │   ├── test_helpers.hpp                   # Google Test fixture & helpers
-│   ├── basic_aggregates_test.cpp          # 24 functions, 55 tests
-│   ├── parameterized_aggregates_test.cpp  # 20 functions, 46 tests
-│   ├── two_column_aggregates_test.cpp     # 27 functions, 57 tests
-│   ├── window_functions_test.cpp          # 23 functions, 41 tests
-│   ├── complex_aggregates_test.cpp        # 32 functions, 63 tests
-│   ├── scalar_tests_helpers_test.cpp      # 40 functions, 43 tests
-│   └── scalar_distributions_test.cpp      # 83 functions, 83 tests
+│   ├── basic_aggregates_test.cpp          # 24 functions, 61 tests
+│   ├── parameterized_aggregates_test.cpp  # 20 functions, 49 tests
+│   ├── two_column_aggregates_test.cpp     # 27 functions, 56 tests
+│   ├── window_functions_test.cpp          # 26 functions, 46 tests
+│   ├── complex_aggregates_test.cpp        # 41 functions, 80 tests
+│   ├── scalar_tests_helpers_test.cpp      # 38 functions, 42 tests
+│   └── scalar_distributions_test.cpp      # 83 functions, 90 tests
 ├── src/
 │   ├── ext_funcs.cpp                      # Extension: 258 SQL functions
 │   ├── main.cpp                           # Legacy test runner (266 tests)

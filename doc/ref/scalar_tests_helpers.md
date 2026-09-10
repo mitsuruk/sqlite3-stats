@@ -1,4 +1,4 @@
-# Scalar Functions — Tests / Helpers (40 Functions)
+# Scalar Functions — Tests / Helpers (38 Functions)
 
 Database-independent scalar functions. Computations are based solely on parameters. Includes distribution functions, special functions, proportion tests, multiple testing corrections, and more.
 

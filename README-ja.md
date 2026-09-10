@@ -116,9 +116,12 @@ ctest --test-dir build --output-on-failure
 | two_column_aggregates_test.cpp | 27 | 56 |
 | window_functions_test.cpp | 26 | 46 |
 | complex_aggregates_test.cpp | 41 | 80 |
-| scalar_tests_helpers_test.cpp | 37 | 42 |
+| scalar_tests_helpers_test.cpp | 38 | 42 |
 | scalar_distributions_test.cpp | 83 | 90 |
 | **合計** | **258** | **424** |
+
+`stat_bonferroni` はウィンドウ関数形式とスカラー形式の両方を持つため両カテゴリ
+に計上しており、関数数の列は 258 個の名前に対して 259 件になる。
 
 ### 拡張機能のロード
 
@@ -203,9 +206,9 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- 効果量=0.5, alpha=0.05, 検出力=0.80
   - [基本集約関数（24）](doc/ref/basic_aggregates-ja.md)
   - [パラメータ付き集約関数（20）](doc/ref/parameterized_aggregates-ja.md)
   - [2 カラム集約関数（27）](doc/ref/two_column_aggregates-ja.md)
-  - [ウィンドウ関数（23）](doc/ref/window_functions-ja.md)
-  - [複合集約関数（32）](doc/ref/complex_aggregates-ja.md)
-  - [スカラー関数 — 検定・補助（40）](doc/ref/scalar_tests_helpers-ja.md)
+  - [ウィンドウ関数（26）](doc/ref/window_functions-ja.md)
+  - [複合集約関数（41）](doc/ref/complex_aggregates-ja.md)
+  - [スカラー関数 — 検定・補助（38）](doc/ref/scalar_tests_helpers-ja.md)
   - [スカラー関数 — 分布・変換（83）](doc/ref/scalar_distributions-ja.md)
 
 ## プロジェクト構成
@@ -217,13 +220,13 @@ sqlite3-stats/
 ├── README-ja.md                           # このファイル（日本語版）
 ├── tests/
 │   ├── test_helpers.hpp                   # Google Test フィクスチャ・ヘルパー
-│   ├── basic_aggregates_test.cpp          # 24 関数, 55 テスト
-│   ├── parameterized_aggregates_test.cpp  # 20 関数, 46 テスト
-│   ├── two_column_aggregates_test.cpp     # 27 関数, 57 テスト
-│   ├── window_functions_test.cpp          # 23 関数, 41 テスト
-│   ├── complex_aggregates_test.cpp        # 32 関数, 63 テスト
-│   ├── scalar_tests_helpers_test.cpp      # 40 関数, 43 テスト
-│   └── scalar_distributions_test.cpp      # 83 関数, 83 テスト
+│   ├── basic_aggregates_test.cpp          # 24 関数, 61 テスト
+│   ├── parameterized_aggregates_test.cpp  # 20 関数, 49 テスト
+│   ├── two_column_aggregates_test.cpp     # 27 関数, 56 テスト
+│   ├── window_functions_test.cpp          # 26 関数, 46 テスト
+│   ├── complex_aggregates_test.cpp        # 41 関数, 80 テスト
+│   ├── scalar_tests_helpers_test.cpp      # 38 関数, 42 テスト
+│   └── scalar_distributions_test.cpp      # 83 関数, 90 テスト
 ├── src/
 │   ├── ext_funcs.cpp                      # 拡張機能: 258 個の SQL 関数
 │   ├── main.cpp                           # レガシーテストランナー（266 テスト）

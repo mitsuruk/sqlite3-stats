@@ -6,7 +6,11 @@
 
 This library is an extension module that makes statistical functions directly available from SQL using SQLite3's `LOAD_EXTENSION` feature.
 
-This reference covers a total of **249 functions**.
+This reference covers a total of **258 functions**.
+
+`stat_bonferroni` is listed under both Window Functions and Scalar Test
+Helpers because it has a window form and a scalar form, so the per-category
+counts add up to 259 listings for those 258 distinct names.
 
 | Category | Count | Description |
 |---|---|---|
@@ -15,13 +19,13 @@ This reference covers a total of **249 functions**.
 | [Two-Column Aggregate Functions](ref/two_column_aggregates.md) | 27 | Two-column input aggregates: `SELECT stat_xxx(col1, col2) FROM table` |
 | [Window Functions](ref/window_functions.md) | 26 | Full-scan window functions that return a value per row |
 | [Complex Aggregate Functions](ref/complex_aggregates.md) | 41 | Aggregate functions returning JSON results, two-sample tests, survival analysis, etc. |
-| [Scalar Functions — Test Helpers](ref/scalar_tests_helpers.md) | 40 | DB-independent: distribution functions, special functions, proportion tests, multiple testing corrections, etc. |
+| [Scalar Functions — Test Helpers](ref/scalar_tests_helpers.md) | 38 | DB-independent: distribution functions, special functions, proportion tests, multiple testing corrections, etc. |
 | [Scalar Functions — Distributions & Transformations](ref/scalar_distributions.md) | 83 | DB-independent: additional distribution functions, effect size conversions, power analysis, etc. |
 
 - **Basic Aggregate Functions through Two-Column Aggregate Functions** (71 functions) are all **aggregate functions** and can be used in any context where SQLite3 standard aggregate functions are available, including `GROUP BY`, `HAVING`, and subqueries.
 - **Window Functions** (26 functions) are implemented as full-scan type and return one value per row.
 - **Complex Aggregate Functions** (41 functions) are **aggregate functions** (including those returning JSON results).
-- **Scalar Functions** (123 functions) compute results solely from their parameters.
+- **Scalar Functions** (121 functions) compute results solely from their parameters.
 
 ---
 
@@ -280,7 +284,7 @@ GROUP BY category;
 | `stat_sample_replace(col, n)` | Sampling with replacement | JSON | [Details](ref/complex_aggregates.md#stat_sample_replace) |
 | `stat_sample(col, n)` | Sampling without replacement | JSON | [Details](ref/complex_aggregates.md#stat_sample) |
 
-### Scalar Functions — Test Helpers (40 functions)
+### Scalar Functions — Test Helpers (38 functions)
 
 | Function | Description | Return | Details |
 |---|---|---|---|

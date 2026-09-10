@@ -1,4 +1,4 @@
-# Window Functions (23 Functions)
+# Window Functions (26 Functions)
 
 Full-scan window functions. Each function returns one value per row. Do not use `GROUP BY`; calculations are performed within the window frame.
 
