@@ -275,7 +275,7 @@ statcpp 内部の数値計算ヘルパであり,SQL から使う意味が薄い.
 
 ### 6-1. `stat_bh_correction` — 単調性補正が欠落(不正)【修正済み】
 
-[src/ext_funcs.cpp:2317-2327](src/ext_funcs.cpp#L2317-L2327):
+修正前の `ext_funcs.cpp`(コミット `62f729e` で削除):
 
 ```cpp
 // BH: stat_bh_correction(p, rank, total) = min(p * total / rank, 1.0)
@@ -301,7 +301,7 @@ statcpp の `benjamini_hochberg_correction` は p値降順に走査して
 
 ### 6-2. `stat_holm_correction` — 単調性補正が欠落(不正)【修正済み】
 
-[src/ext_funcs.cpp:2326-2333](src/ext_funcs.cpp#L2326-L2333):
+修正前の `ext_funcs.cpp`(コミット `62f729e` で削除):
 
 ```cpp
 // Holm: stat_holm_correction(p, rank, total) = min(p * (total - rank + 1), 1.0)
@@ -328,13 +328,13 @@ statcpp は p値昇順に `adj = std::max(adj, max_adj)` で単調性を強制�
 
 ### 6-3. `stat_bonferroni` — 結果は一致するが再実装
 
-[src/ext_funcs.cpp:2311-2316](src/ext_funcs.cpp#L2311-L2316). `min(p*n, 1.0)` は
+[src/ext_funcs.cpp:2621](../src/ext_funcs.cpp#L2621). `min(p*m, 1.0)` は
 statcpp と同式なので結果は正しい. ただし D-2 で集約化すれば `n` を手渡す必要がなくなる.
 
 ### 6-4. `stat_boxcox` / `stat_logarithmic_mean` — 結果は一致するが再実装
 
-[src/ext_funcs.cpp:2438](src/ext_funcs.cpp#L2438),
-[src/ext_funcs.cpp:2786](src/ext_funcs.cpp#L2786).
+[src/ext_funcs.cpp:2731](../src/ext_funcs.cpp#L2731),
+[src/ext_funcs.cpp:3079](../src/ext_funcs.cpp#L3079).
 式は statcpp と同一で結果は正しい. statcpp 呼び出しに統一すれば,
 将来 statcpp 側の改良(数値安定性など)が自動的に反映される.
 

@@ -371,10 +371,10 @@ GROUP BY category;
 | `stat_n_t2(d, power, alpha)` | Two-sample required n | REAL | [Details](ref/scalar_distributions.md#power-analysis) |
 | `stat_power_prop(p1, p2, n, alpha)` | Proportion power | REAL | [Details](ref/scalar_distributions.md#power-analysis) |
 | `stat_n_prop(p1, p2, power, alpha)` | Proportion required n | REAL | [Details](ref/scalar_distributions.md#power-analysis) |
-| `stat_moe_prop(x, n [,conf])` | Margin of error for proportion | REAL | [Details](ref/scalar_distributions.md#sample-size-margin-of-error) |
-| `stat_moe_prop_worst(n [,conf])` | Worst-case margin of error | REAL | [Details](ref/scalar_distributions.md#sample-size-margin-of-error) |
-| `stat_n_moe_prop(moe [,conf [,p]])` | Required n for proportion estimation | REAL | [Details](ref/scalar_distributions.md#sample-size-margin-of-error) |
-| `stat_n_moe_mean(moe, sigma [,conf])` | Required n for mean estimation | REAL | [Details](ref/scalar_distributions.md#sample-size-margin-of-error) |
+| `stat_moe_prop(x, n [,conf])` | Margin of error for proportion | REAL | [Details](ref/scalar_distributions.md#sample-size--margin-of-error) |
+| `stat_moe_prop_worst(n [,conf])` | Worst-case margin of error | REAL | [Details](ref/scalar_distributions.md#sample-size--margin-of-error) |
+| `stat_n_moe_prop(moe [,conf [,p]])` | Required n for proportion estimation | REAL | [Details](ref/scalar_distributions.md#sample-size--margin-of-error) |
+| `stat_n_moe_mean(moe, sigma [,conf])` | Required n for mean estimation | REAL | [Details](ref/scalar_distributions.md#sample-size--margin-of-error) |
 
 ---
 
