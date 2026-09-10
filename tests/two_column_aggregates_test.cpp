@@ -1,28 +1,28 @@
 /**
  * @file two_column_aggregates_test.cpp
- * @brief 2カラム集約統計関数(27関数)のテスト
+ * @brief Tests for the two-column aggregate functions (27 functions)
  *
- * 相関・共分散, 重み付き統計, 回帰, ペア検定,
- * 予測精度指標, 距離尺度の各関数を検証する.
+ * Verifies correlation and covariance, weighted statistics, regression, paired
+ * tests, prediction accuracy metrics and distance measures.
  */
 
 #include "test_helpers.hpp"
 
-/// @brief 2カラム集約統計関数テスト用フィクスチャ
+/// @brief Fixture for the two-column aggregate function tests
 class TwoColumnAggregates : public StatFuncTest {};
 
 // =====================================================================
-// 1. stat_population_covariance (母共分散)
+// 1. stat_population_covariance (population covariance)
 // =====================================================================
 
-/// @brief 正常系: xy_dataの母共分散が有限値であること
+/// @brief Normal case: population covariance of xy_data is finite
 TEST_F(TwoColumnAggregates, PopulationCovarianceNormal) {
     double result = query_double(
         db_, "SELECT stat_population_covariance(x, y) FROM xy_data");
     EXPECT_TRUE(std::isfinite(result)) << "result=" << result;
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, PopulationCovarianceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -30,47 +30,47 @@ TEST_F(TwoColumnAggregates, PopulationCovarianceEmpty) {
 }
 
 // =====================================================================
-// 2. stat_covariance (不偏共分散)
+// 2. stat_covariance (unbiased covariance)
 // =====================================================================
 
-/// @brief 正常系: xy_dataの不偏共分散が有限値であること
+/// @brief Normal case: unbiased covariance of xy_data is finite
 TEST_F(TwoColumnAggregates, CovarianceNormal) {
     double result =
         query_double(db_, "SELECT stat_covariance(x, y) FROM xy_data");
     EXPECT_TRUE(std::isfinite(result)) << "result=" << result;
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, CovarianceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_covariance(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 3. stat_pearson_r (ピアソン相関係数)
+// 3. stat_pearson_r (Pearson correlation coefficient)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで正の相関が期待される(-1~1の範囲)
+/// @brief Normal case: a positive correlation is expected for xy_data (range -1 to 1)
 TEST_F(TwoColumnAggregates, PearsonRNormal) {
     double result =
         query_double(db_, "SELECT stat_pearson_r(x, y) FROM xy_data");
     EXPECT_TRUE(std::isfinite(result)) << "result=" << result;
     EXPECT_GE(result, -1.0);
     EXPECT_LE(result, 1.0);
-    EXPECT_GT(result, 0.0) << "正の相関が期待される";
+    EXPECT_GT(result, 0.0) << "a positive correlation is expected";
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, PearsonREmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_pearson_r(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 4. stat_spearman_r (スピアマン順位相関係数)
+// 4. stat_spearman_r (Spearman rank correlation coefficient)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで-1~1の範囲であること
+/// @brief Normal case: within the range -1 to 1 for xy_data
 TEST_F(TwoColumnAggregates, SpearmanRNormal) {
     double result =
         query_double(db_, "SELECT stat_spearman_r(x, y) FROM xy_data");
@@ -79,17 +79,17 @@ TEST_F(TwoColumnAggregates, SpearmanRNormal) {
     EXPECT_LE(result, 1.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, SpearmanREmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_spearman_r(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 5. stat_kendall_tau (ケンドールの順位相関係数)
+// 5. stat_kendall_tau (Kendall rank correlation coefficient)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで-1~1の範囲であること
+/// @brief Normal case: within the range -1 to 1 for xy_data
 TEST_F(TwoColumnAggregates, KendallTauNormal) {
     double result =
         query_double(db_, "SELECT stat_kendall_tau(x, y) FROM xy_data");
@@ -98,24 +98,24 @@ TEST_F(TwoColumnAggregates, KendallTauNormal) {
     EXPECT_LE(result, 1.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, KendallTauEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_kendall_tau(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 6. stat_weighted_covariance (重み付き共分散)
+// 6. stat_weighted_covariance (weighted covariance)
 // =====================================================================
 
-/// @brief 正常系: wt_dataの重み付き共分散が有限値であること
+/// @brief Normal case: weighted covariance of wt_data is finite
 TEST_F(TwoColumnAggregates, WeightedCovarianceNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_covariance(val, wt) FROM wt_data");
     EXPECT_TRUE(std::isfinite(result)) << "result=" << result;
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedCovarianceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -123,27 +123,27 @@ TEST_F(TwoColumnAggregates, WeightedCovarianceEmpty) {
 }
 
 // =====================================================================
-// 7. stat_weighted_mean (重み付き平均)
+// 7. stat_weighted_mean (weighted mean)
 // =====================================================================
 
-/// @brief 正常系: wt_data → sum(val*wt)/sum(wt) = 270/9 = 30.0
+/// @brief Normal case: wt_data -> sum(val*wt)/sum(wt) = 270/9 = 30.0
 TEST_F(TwoColumnAggregates, WeightedMeanNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_mean(val, wt) FROM wt_data");
     EXPECT_NEAR(result, 30.0, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedMeanEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_weighted_mean(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 8. stat_weighted_harmonic_mean (重み付き調和平均)
+// 8. stat_weighted_harmonic_mean (weighted harmonic mean)
 // =====================================================================
 
-/// @brief 正常系: wt_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for wt_data
 TEST_F(TwoColumnAggregates, WeightedHarmonicMeanNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_harmonic_mean(val, wt) FROM wt_data");
@@ -151,7 +151,7 @@ TEST_F(TwoColumnAggregates, WeightedHarmonicMeanNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedHarmonicMeanEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -159,10 +159,10 @@ TEST_F(TwoColumnAggregates, WeightedHarmonicMeanEmpty) {
 }
 
 // =====================================================================
-// 9. stat_weighted_variance (重み付き分散)
+// 9. stat_weighted_variance (weighted variance)
 // =====================================================================
 
-/// @brief 正常系: wt_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for wt_data
 TEST_F(TwoColumnAggregates, WeightedVarianceNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_variance(val, wt) FROM wt_data");
@@ -170,7 +170,7 @@ TEST_F(TwoColumnAggregates, WeightedVarianceNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedVarianceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -178,10 +178,10 @@ TEST_F(TwoColumnAggregates, WeightedVarianceEmpty) {
 }
 
 // =====================================================================
-// 10. stat_weighted_stddev (重み付き標準偏差)
+// 10. stat_weighted_stddev (weighted standard deviation)
 // =====================================================================
 
-/// @brief 正常系: wt_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for wt_data
 TEST_F(TwoColumnAggregates, WeightedStddevNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_stddev(val, wt) FROM wt_data");
@@ -189,7 +189,7 @@ TEST_F(TwoColumnAggregates, WeightedStddevNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedStddevEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -197,17 +197,17 @@ TEST_F(TwoColumnAggregates, WeightedStddevEmpty) {
 }
 
 // =====================================================================
-// 11. stat_weighted_median (重み付き中央値)
+// 11. stat_weighted_median (weighted median)
 // =====================================================================
 
-/// @brief 正常系: wt_data → 30.0 (重み最大の値が中央)
+/// @brief Normal case: wt_data -> 30.0 (the most heavily weighted value is central)
 TEST_F(TwoColumnAggregates, WeightedMedianNormal) {
     double result = query_double(
         db_, "SELECT stat_weighted_median(val, wt) FROM wt_data");
     EXPECT_NEAR(result, 30.0, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedMedianEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -215,10 +215,10 @@ TEST_F(TwoColumnAggregates, WeightedMedianEmpty) {
 }
 
 // =====================================================================
-// 12. stat_weighted_percentile (重み付きパーセンタイル)
+// 12. stat_weighted_percentile (weighted percentile)
 // =====================================================================
 
-/// @brief 正常系: wt_dataの50パーセンタイル → weighted_medianと同じか近い値
+/// @brief Normal case: 50th percentile of wt_data -> equal or close to weighted_median
 TEST_F(TwoColumnAggregates, WeightedPercentileNormal) {
     double result = query_double(
         db_,
@@ -229,7 +229,7 @@ TEST_F(TwoColumnAggregates, WeightedPercentileNormal) {
     EXPECT_NEAR(result, median, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, WeightedPercentileEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -237,24 +237,24 @@ TEST_F(TwoColumnAggregates, WeightedPercentileEmpty) {
 }
 
 // =====================================================================
-// 13. stat_simple_regression (単回帰)
+// 13. stat_simple_regression (simple linear regression)
 // =====================================================================
 
-/// @brief 正常系: xy_data → JSON, slopeが正, r_squaredが0-1の範囲
+/// @brief Normal case: xy_data -> JSON, positive slope, r_squared within 0-1
 TEST_F(TwoColumnAggregates, SimpleRegressionNormal) {
     std::string result = query_text(
         db_, "SELECT stat_simple_regression(x, y) FROM xy_data");
-    EXPECT_FALSE(result.empty()) << "JSONが返却されるべき";
+    EXPECT_FALSE(result.empty()) << "JSON should be returned";
 
     double slope = json_double(db_, result, "$.slope");
-    EXPECT_GT(slope, 0.0) << "正の傾きが期待される";
+    EXPECT_GT(slope, 0.0) << "a positive slope is expected";
 
     double r_squared = json_double(db_, result, "$.r_squared");
     EXPECT_GE(r_squared, 0.0);
     EXPECT_LE(r_squared, 1.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, SimpleRegressionEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -262,10 +262,10 @@ TEST_F(TwoColumnAggregates, SimpleRegressionEmpty) {
 }
 
 // =====================================================================
-// 14. stat_r_squared (決定係数)
+// 14. stat_r_squared (coefficient of determination)
 // =====================================================================
 
-/// @brief 正常系: pred_data → 0-1の範囲
+/// @brief Normal case: pred_data -> within the range 0-1
 TEST_F(TwoColumnAggregates, RSquaredNormal) {
     double result = query_double(
         db_,
@@ -275,17 +275,17 @@ TEST_F(TwoColumnAggregates, RSquaredNormal) {
     EXPECT_LE(result, 1.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, RSquaredEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_r_squared(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 15. stat_adjusted_r_squared (自由度調整済み決定係数)
+// 15. stat_adjusted_r_squared (adjusted coefficient of determination)
 // =====================================================================
 
-/// @brief 正常系: pred_data → r_squared以下の値
+/// @brief Normal case: pred_data -> no greater than r_squared
 TEST_F(TwoColumnAggregates, AdjustedRSquaredNormal) {
     double r_sq = query_double(
         db_,
@@ -294,10 +294,10 @@ TEST_F(TwoColumnAggregates, AdjustedRSquaredNormal) {
         db_,
         "SELECT stat_adjusted_r_squared(actual, predicted) FROM pred_data");
     EXPECT_TRUE(std::isfinite(adj_r_sq)) << "result=" << adj_r_sq;
-    EXPECT_LE(adj_r_sq, r_sq) << "自由度調整済みR^2はR^2以下であるべき";
+    EXPECT_LE(adj_r_sq, r_sq) << "adjusted R^2 should not exceed R^2";
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, AdjustedRSquaredEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -305,14 +305,14 @@ TEST_F(TwoColumnAggregates, AdjustedRSquaredEmpty) {
 }
 
 // =====================================================================
-// 16. stat_t_test_paired (対応のあるt検定)
+// 16. stat_t_test_paired (paired t-test)
 // =====================================================================
 
-/// @brief 正常系: xy_data → JSON, df=9
+/// @brief Normal case: xy_data -> JSON, df=9
 TEST_F(TwoColumnAggregates, TTestPairedNormal) {
     std::string result = query_text(
         db_, "SELECT stat_t_test_paired(x, y) FROM xy_data");
-    EXPECT_FALSE(result.empty()) << "JSONが返却されるべき";
+    EXPECT_FALSE(result.empty()) << "JSON should be returned";
 
     double statistic = json_double(db_, result, "$.statistic");
     EXPECT_TRUE(std::isfinite(statistic)) << "statistic=" << statistic;
@@ -324,22 +324,22 @@ TEST_F(TwoColumnAggregates, TTestPairedNormal) {
     EXPECT_NEAR(df, 9.0, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, TTestPairedEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_t_test_paired(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 17. stat_chisq_gof (カイ二乗適合度検定)
+// 17. stat_chisq_gof (chi-square goodness-of-fit test)
 // =====================================================================
 
-/// @brief 正常系: pred_data → JSON, statistic/p_valueが有限値
+/// @brief Normal case: pred_data -> JSON, finite statistic and p_value
 TEST_F(TwoColumnAggregates, ChisqGofNormal) {
     std::string result = query_text(
         db_,
         "SELECT stat_chisq_gof(actual, predicted) FROM pred_data");
-    EXPECT_FALSE(result.empty()) << "JSONが返却されるべき";
+    EXPECT_FALSE(result.empty()) << "JSON should be returned";
 
     double statistic = json_double(db_, result, "$.statistic");
     EXPECT_TRUE(std::isfinite(statistic)) << "statistic=" << statistic;
@@ -348,17 +348,17 @@ TEST_F(TwoColumnAggregates, ChisqGofNormal) {
     EXPECT_TRUE(std::isfinite(p_value)) << "p_value=" << p_value;
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, ChisqGofEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_chisq_gof(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 18. stat_mae (平均絶対誤差)
+// 18. stat_mae (mean absolute error)
 // =====================================================================
 
-/// @brief 正常系: pred_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for pred_data
 TEST_F(TwoColumnAggregates, MaeNormal) {
     double result = query_double(
         db_, "SELECT stat_mae(actual, predicted) FROM pred_data");
@@ -366,17 +366,17 @@ TEST_F(TwoColumnAggregates, MaeNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, MaeEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_mae(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 19. stat_mse (平均二乗誤差)
+// 19. stat_mse (mean squared error)
 // =====================================================================
 
-/// @brief 正常系: pred_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for pred_data
 TEST_F(TwoColumnAggregates, MseNormal) {
     double result = query_double(
         db_, "SELECT stat_mse(actual, predicted) FROM pred_data");
@@ -384,17 +384,17 @@ TEST_F(TwoColumnAggregates, MseNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, MseEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_mse(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 20. stat_rmse (二乗平均平方根誤差)
+// 20. stat_rmse (root mean squared error)
 // =====================================================================
 
-/// @brief 正常系: pred_data → sqrt(mse)
+/// @brief Normal case: pred_data -> sqrt(mse)
 TEST_F(TwoColumnAggregates, RmseNormal) {
     double mse = query_double(
         db_, "SELECT stat_mse(actual, predicted) FROM pred_data");
@@ -405,17 +405,17 @@ TEST_F(TwoColumnAggregates, RmseNormal) {
     EXPECT_NEAR(rmse, std::sqrt(mse), 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, RmseEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_rmse(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 21. stat_mape (平均絶対パーセント誤差)
+// 21. stat_mape (mean absolute percentage error)
 // =====================================================================
 
-/// @brief 正常系: pred_dataで有限の正の値(%)であること
+/// @brief Normal case: a finite positive value (%) for pred_data
 TEST_F(TwoColumnAggregates, MapeNormal) {
     double result = query_double(
         db_, "SELECT stat_mape(actual, predicted) FROM pred_data");
@@ -423,17 +423,17 @@ TEST_F(TwoColumnAggregates, MapeNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, MapeEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_mape(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 22. stat_euclidean_dist (ユークリッド距離)
+// 22. stat_euclidean_dist (Euclidean distance)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for xy_data
 TEST_F(TwoColumnAggregates, EuclideanDistNormal) {
     double result = query_double(
         db_, "SELECT stat_euclidean_dist(x, y) FROM xy_data");
@@ -441,13 +441,13 @@ TEST_F(TwoColumnAggregates, EuclideanDistNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, EuclideanDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_euclidean_dist(val, val) FROM empty_data"));
 }
 
-/// @brief 同一ベクトル → 0.0
+/// @brief Identical vectors -> 0.0
 TEST_F(TwoColumnAggregates, EuclideanDistSameVector) {
     double result = query_double(
         db_, "SELECT stat_euclidean_dist(x, x) FROM xy_data");
@@ -455,10 +455,10 @@ TEST_F(TwoColumnAggregates, EuclideanDistSameVector) {
 }
 
 // =====================================================================
-// 23. stat_manhattan_dist (マンハッタン距離)
+// 23. stat_manhattan_dist (Manhattan distance)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for xy_data
 TEST_F(TwoColumnAggregates, ManhattanDistNormal) {
     double result = query_double(
         db_, "SELECT stat_manhattan_dist(x, y) FROM xy_data");
@@ -466,33 +466,33 @@ TEST_F(TwoColumnAggregates, ManhattanDistNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, ManhattanDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_manhattan_dist(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 24. stat_cosine_sim (コサイン類似度)
+// 24. stat_cosine_sim (cosine similarity)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで-1~1の範囲(正が期待される)
+/// @brief Normal case: within -1 to 1 for xy_data (positive expected)
 TEST_F(TwoColumnAggregates, CosineSimNormal) {
     double result = query_double(
         db_, "SELECT stat_cosine_sim(x, y) FROM xy_data");
     EXPECT_TRUE(std::isfinite(result)) << "result=" << result;
     EXPECT_GE(result, -1.0);
     EXPECT_LE(result, 1.0);
-    EXPECT_GT(result, 0.0) << "正のコサイン類似度が期待される";
+    EXPECT_GT(result, 0.0) << "a positive cosine similarity is expected";
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, CosineSimEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_cosine_sim(val, val) FROM empty_data"));
 }
 
-/// @brief 同一ベクトル → 1.0
+/// @brief Identical vectors -> 1.0
 TEST_F(TwoColumnAggregates, CosineSimSameVector) {
     double result = query_double(
         db_, "SELECT stat_cosine_sim(x, x) FROM xy_data");
@@ -500,10 +500,10 @@ TEST_F(TwoColumnAggregates, CosineSimSameVector) {
 }
 
 // =====================================================================
-// 25. stat_cosine_dist (コサイン距離)
+// 25. stat_cosine_dist (cosine distance)
 // =====================================================================
 
-/// @brief 正常系: xy_data → 1 - cosine_sim
+/// @brief Normal case: xy_data -> 1 - cosine_sim
 TEST_F(TwoColumnAggregates, CosineDistNormal) {
     double sim = query_double(
         db_, "SELECT stat_cosine_sim(x, y) FROM xy_data");
@@ -513,17 +513,17 @@ TEST_F(TwoColumnAggregates, CosineDistNormal) {
     EXPECT_NEAR(dist, 1.0 - sim, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, CosineDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_cosine_dist(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 26. stat_minkowski_dist (ミンコフスキー距離)
+// 26. stat_minkowski_dist (Minkowski distance)
 // =====================================================================
 
-/// @brief 正常系: xy_data, p=3 で有限の正の値であること
+/// @brief Normal case: a finite positive value for xy_data with p=3
 TEST_F(TwoColumnAggregates, MinkowskiDistNormal) {
     double result = query_double(
         db_, "SELECT stat_minkowski_dist(x, y, 3) FROM xy_data");
@@ -531,7 +531,7 @@ TEST_F(TwoColumnAggregates, MinkowskiDistNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, MinkowskiDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_,
@@ -539,10 +539,10 @@ TEST_F(TwoColumnAggregates, MinkowskiDistEmpty) {
 }
 
 // =====================================================================
-// 27. stat_chebyshev_dist (チェビシェフ距離)
+// 27. stat_chebyshev_dist (Chebyshev distance)
 // =====================================================================
 
-/// @brief 正常系: xy_dataで有限の正の値であること
+/// @brief Normal case: a finite positive value for xy_data
 TEST_F(TwoColumnAggregates, ChebyshevDistNormal) {
     double result = query_double(
         db_, "SELECT stat_chebyshev_dist(x, y) FROM xy_data");
@@ -550,7 +550,7 @@ TEST_F(TwoColumnAggregates, ChebyshevDistNormal) {
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(TwoColumnAggregates, ChebyshevDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_chebyshev_dist(val, val) FROM empty_data"));

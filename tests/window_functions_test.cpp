@@ -1,64 +1,64 @@
 /**
  * @file window_functions_test.cpp
- * @brief ウィンドウ関数(23関数)のテスト
+ * @brief Tests for the window functions (26 functions)
  *
- * ローリング統計,移動平均,ランク,欠損値補完,エンコーディング,
- * 時系列変換,外れ値検出,ロバスト処理の各ウィンドウ関数を検証する.
+ * Verifies rolling statistics, moving averages, ranking, missing-value imputation,
+ * encoding, time-series transforms, outlier detection and robust processing.
  *
- * 注意: ウィンドウ関数は OVER 句の有無で挙動が異なる.
- * - ローリング系(rolling_mean等): OVER句なしで集約として呼び出す
- * - その他(rank, fillna等): OVER (ORDER BY id ROWS BETWEEN
- *   UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) で全行返却
+ * Note: a window function behaves differently with and without an OVER clause.
+ * - Rolling family (rolling_mean and so on): called as an aggregate, without OVER
+ * - Everything else (rank, fillna and so on): OVER (ORDER BY id ROWS BETWEEN
+ *   UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING) to return every row
  */
 
 #include "test_helpers.hpp"
 
 #include <algorithm>
 
-/// @brief ウィンドウ関数テスト用フィクスチャ
+/// @brief Fixture for the window function tests
 class WindowFunctions : public StatFuncTest {};
 
-/// @brief OVER句の定型句
+/// @brief The standard OVER clause
 static const char* kFullFrame =
     " OVER (ORDER BY id ROWS BETWEEN "
     "UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING)";
 
 // =====================================================================
 // 1-5. stat_rolling_mean / std / min / max / sum
-// ローリング系は OVER 句なしで集約呼出し(結果確認のみ)
+// The rolling family is called as an aggregate without OVER (result checked only)
 // =====================================================================
 
-/// @brief stat_rolling_mean: 集約として呼び出せること
+/// @brief stat_rolling_mean: can be called as an aggregate
 TEST_F(WindowFunctions, RollingMeanAggregate) {
-    // 集約として1行返却(先頭行のみ)
+    // Returns a single row as an aggregate (the first row only)
     auto result = query_double(
         db_, "SELECT stat_rolling_mean(val, 3) FROM ts_data");
-    // 結果はNULLまたは有限値
+    // The result is either NULL or a finite value
     SUCCEED();
 }
 
-/// @brief stat_rolling_std: 集約として呼び出せること
+/// @brief stat_rolling_std: can be called as an aggregate
 TEST_F(WindowFunctions, RollingStdAggregate) {
     auto result = query_double(
         db_, "SELECT stat_rolling_std(val, 3) FROM ts_data");
     SUCCEED();
 }
 
-/// @brief stat_rolling_min: 集約として呼び出せること
+/// @brief stat_rolling_min: can be called as an aggregate
 TEST_F(WindowFunctions, RollingMinAggregate) {
     auto result = query_double(
         db_, "SELECT stat_rolling_min(val, 3) FROM ts_data");
     SUCCEED();
 }
 
-/// @brief stat_rolling_max: 集約として呼び出せること
+/// @brief stat_rolling_max: can be called as an aggregate
 TEST_F(WindowFunctions, RollingMaxAggregate) {
     auto result = query_double(
         db_, "SELECT stat_rolling_max(val, 3) FROM ts_data");
     SUCCEED();
 }
 
-/// @brief stat_rolling_sum: 集約として呼び出せること
+/// @brief stat_rolling_sum: can be called as an aggregate
 TEST_F(WindowFunctions, RollingSumAggregate) {
     auto result = query_double(
         db_, "SELECT stat_rolling_sum(val, 3) FROM ts_data");
@@ -69,7 +69,7 @@ TEST_F(WindowFunctions, RollingSumAggregate) {
 // 6. stat_moving_avg
 // =====================================================================
 
-/// @brief stat_moving_avg: 集約として呼び出せること
+/// @brief stat_moving_avg: can be called as an aggregate
 TEST_F(WindowFunctions, MovingAvgAggregate) {
     auto result = query_double(
         db_, "SELECT stat_moving_avg(val, 3) FROM ts_data");
@@ -80,7 +80,7 @@ TEST_F(WindowFunctions, MovingAvgAggregate) {
 // 7. stat_ema
 // =====================================================================
 
-/// @brief 正常系: 指数加重移動平均(OVER句で全行返却)
+/// @brief Normal case: exponentially weighted moving average (every row, via OVER)
 TEST_F(WindowFunctions, EmaRowCount) {
     std::string sql = "SELECT stat_ema(val, 5)";
     sql += kFullFrame;
@@ -89,7 +89,7 @@ TEST_F(WindowFunctions, EmaRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief 先頭行は元の値と一致する
+/// @brief The first row matches the original value
 TEST_F(WindowFunctions, EmaFirstRow) {
     std::string sql = "SELECT stat_ema(val, 5)";
     sql += kFullFrame;
@@ -103,7 +103,7 @@ TEST_F(WindowFunctions, EmaFirstRow) {
 // 8. stat_rank
 // =====================================================================
 
-/// @brief 正常系: data(1-10)のランク付け(10行返却)
+/// @brief Normal case: ranking data(1-10) (10 rows returned)
 TEST_F(WindowFunctions, RankRowCount) {
     std::string sql = "SELECT stat_rank(val)";
     sql += kFullFrame;
@@ -112,13 +112,13 @@ TEST_F(WindowFunctions, RankRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief ランクの結果に1-10が全て含まれる
+/// @brief The ranks contain every value from 1 to 10
 TEST_F(WindowFunctions, RankContainsAllRanks) {
     std::string sql = "SELECT stat_rank(val)";
     sql += kFullFrame;
     sql += " FROM data";
     auto results = query_doubles(db_, sql.c_str());
-    // ランク値をソートして1-10であることを確認
+    // Sort the ranks and confirm they are 1-10
     std::vector<double> sorted = results;
     std::sort(sorted.begin(), sorted.end());
     for (size_t i = 0; i < sorted.size(); ++i) {
@@ -131,7 +131,7 @@ TEST_F(WindowFunctions, RankContainsAllRanks) {
 // 9. stat_fillna_mean
 // =====================================================================
 
-/// @brief 正常系: NULL行が平均値で補完される(10行返却)
+/// @brief Normal case: NULL rows are filled with the mean (10 rows returned)
 TEST_F(WindowFunctions, FillnaMeanRowCount) {
     std::string sql = "SELECT stat_fillna_mean(val)";
     sql += kFullFrame;
@@ -140,7 +140,7 @@ TEST_F(WindowFunctions, FillnaMeanRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief NULLが補完されてNaNがない
+/// @brief NULLs are filled in, leaving no NaN
 TEST_F(WindowFunctions, FillnaMeanNoNaN) {
     std::string sql = "SELECT stat_fillna_mean(val)";
     sql += kFullFrame;
@@ -155,7 +155,7 @@ TEST_F(WindowFunctions, FillnaMeanNoNaN) {
 // 10. stat_fillna_median
 // =====================================================================
 
-/// @brief 正常系: 10行返却
+/// @brief Normal case: 10 rows returned
 TEST_F(WindowFunctions, FillnaMedianRowCount) {
     std::string sql = "SELECT stat_fillna_median(val)";
     sql += kFullFrame;
@@ -164,7 +164,7 @@ TEST_F(WindowFunctions, FillnaMedianRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief NULLが補完されてNaNがない
+/// @brief NULLs are filled in, leaving no NaN
 TEST_F(WindowFunctions, FillnaMedianNoNaN) {
     std::string sql = "SELECT stat_fillna_median(val)";
     sql += kFullFrame;
@@ -179,7 +179,7 @@ TEST_F(WindowFunctions, FillnaMedianNoNaN) {
 // 11. stat_fillna_ffill
 // =====================================================================
 
-/// @brief 正常系: 前方穴埋め(10行返却)
+/// @brief Normal case: forward fill (10 rows returned)
 TEST_F(WindowFunctions, FillnaFfillRowCount) {
     std::string sql = "SELECT stat_fillna_ffill(val)";
     sql += kFullFrame;
@@ -188,7 +188,7 @@ TEST_F(WindowFunctions, FillnaFfillRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief 先頭行は10.0(非NULL)
+/// @brief The first row is 10.0 (not NULL)
 TEST_F(WindowFunctions, FillnaFfillFirstRow) {
     std::string sql = "SELECT stat_fillna_ffill(val)";
     sql += kFullFrame;
@@ -202,7 +202,7 @@ TEST_F(WindowFunctions, FillnaFfillFirstRow) {
 // 12. stat_fillna_bfill
 // =====================================================================
 
-/// @brief 正常系: 後方穴埋め(10行返却)
+/// @brief Normal case: backward fill (10 rows returned)
 TEST_F(WindowFunctions, FillnaBfillRowCount) {
     std::string sql = "SELECT stat_fillna_bfill(val)";
     sql += kFullFrame;
@@ -215,7 +215,7 @@ TEST_F(WindowFunctions, FillnaBfillRowCount) {
 // 13. stat_fillna_interp
 // =====================================================================
 
-/// @brief 正常系: 線形補間(10行返却)
+/// @brief Normal case: linear interpolation (10 rows returned)
 TEST_F(WindowFunctions, FillnaInterpRowCount) {
     std::string sql = "SELECT stat_fillna_interp(val)";
     sql += kFullFrame;
@@ -228,7 +228,7 @@ TEST_F(WindowFunctions, FillnaInterpRowCount) {
 // 14. stat_label_encode
 // =====================================================================
 
-/// @brief 正常系: カテゴリカルエンコーディング(6行返却)
+/// @brief Normal case: categorical encoding (6 rows returned)
 TEST_F(WindowFunctions, LabelEncodeRowCount) {
     std::string sql = "SELECT stat_label_encode(val)";
     sql += kFullFrame;
@@ -237,7 +237,7 @@ TEST_F(WindowFunctions, LabelEncodeRowCount) {
     EXPECT_EQ(results.size(), 6u);
 }
 
-/// @brief エンコード結果に0,1,2が含まれる(3種類の値)
+/// @brief The encoded result contains 0, 1 and 2 (three distinct values)
 TEST_F(WindowFunctions, LabelEncodeRange) {
     std::string sql = "SELECT stat_label_encode(val)";
     sql += kFullFrame;
@@ -253,7 +253,7 @@ TEST_F(WindowFunctions, LabelEncodeRange) {
 // 15. stat_bin_width
 // =====================================================================
 
-/// @brief 正常系: 等幅ビニング(10行返却)
+/// @brief Normal case: equal-width binning (10 rows returned)
 TEST_F(WindowFunctions, BinWidthRowCount) {
     std::string sql = "SELECT stat_bin_width(val, 3)";
     sql += kFullFrame;
@@ -266,7 +266,7 @@ TEST_F(WindowFunctions, BinWidthRowCount) {
 // 16. stat_bin_freq
 // =====================================================================
 
-/// @brief 正常系: 等度数ビニング(10行返却)
+/// @brief Normal case: equal-frequency binning (10 rows returned)
 TEST_F(WindowFunctions, BinFreqRowCount) {
     std::string sql = "SELECT stat_bin_freq(val, 3)";
     sql += kFullFrame;
@@ -279,7 +279,7 @@ TEST_F(WindowFunctions, BinFreqRowCount) {
 // 17. stat_lag
 // =====================================================================
 
-/// @brief 正常系: ラグ関数(10行返却)
+/// @brief Normal case: lag function (10 rows returned)
 TEST_F(WindowFunctions, LagRowCount) {
     std::string sql = "SELECT stat_lag(val, 1)";
     sql += kFullFrame;
@@ -288,7 +288,7 @@ TEST_F(WindowFunctions, LagRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief NaN行が1つある(ラグ分)
+/// @brief One row is NaN (the lagged one)
 TEST_F(WindowFunctions, LagHasOneNaN) {
     std::string sql = "SELECT stat_lag(val, 1)";
     sql += kFullFrame;
@@ -305,7 +305,7 @@ TEST_F(WindowFunctions, LagHasOneNaN) {
 // 18. stat_diff
 // =====================================================================
 
-/// @brief 正常系: 1階差分(10行返却)
+/// @brief Normal case: first difference (10 rows returned)
 TEST_F(WindowFunctions, DiffRowCount) {
     std::string sql = "SELECT stat_diff(val, 1)";
     sql += kFullFrame;
@@ -314,7 +314,7 @@ TEST_F(WindowFunctions, DiffRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief NaN行が1つ,残り9行は差分1.0
+/// @brief One row is NaN; the remaining 9 have a difference of 1.0
 TEST_F(WindowFunctions, DiffValues) {
     std::string sql = "SELECT stat_diff(val, 1)";
     sql += kFullFrame;
@@ -337,7 +337,7 @@ TEST_F(WindowFunctions, DiffValues) {
 // 19. stat_seasonal_diff
 // =====================================================================
 
-/// @brief 正常系: 季節差分(10行返却)
+/// @brief Normal case: seasonal difference (10 rows returned)
 TEST_F(WindowFunctions, SeasonalDiffRowCount) {
     std::string sql = "SELECT stat_seasonal_diff(val, 3)";
     sql += kFullFrame;
@@ -346,7 +346,7 @@ TEST_F(WindowFunctions, SeasonalDiffRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief NaN行が3つ,残り7行は差分3.0
+/// @brief Three rows are NaN; the remaining 7 have a difference of 3.0
 TEST_F(WindowFunctions, SeasonalDiffValues) {
     std::string sql = "SELECT stat_seasonal_diff(val, 3)";
     sql += kFullFrame;
@@ -369,7 +369,7 @@ TEST_F(WindowFunctions, SeasonalDiffValues) {
 // 20. stat_outliers_iqr
 // =====================================================================
 
-/// @brief 正常系: IQR外れ値検出(10行返却)
+/// @brief Normal case: IQR outlier detection (10 rows returned)
 TEST_F(WindowFunctions, OutliersIqrRowCount) {
     std::string sql = "SELECT stat_outliers_iqr(val)";
     sql += kFullFrame;
@@ -378,7 +378,7 @@ TEST_F(WindowFunctions, OutliersIqrRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief data(1-10): 外れ値なし → 全て0.0
+/// @brief data(1-10): no outliers -> all 0.0
 TEST_F(WindowFunctions, OutliersIqrNoOutliers) {
     std::string sql = "SELECT stat_outliers_iqr(val)";
     sql += kFullFrame;
@@ -395,7 +395,7 @@ TEST_F(WindowFunctions, OutliersIqrNoOutliers) {
 // 21. stat_outliers_zscore
 // =====================================================================
 
-/// @brief 正常系: Zスコア外れ値検出(10行返却)
+/// @brief Normal case: z-score outlier detection (10 rows returned)
 TEST_F(WindowFunctions, OutliersZscoreRowCount) {
     std::string sql = "SELECT stat_outliers_zscore(val)";
     sql += kFullFrame;
@@ -404,7 +404,7 @@ TEST_F(WindowFunctions, OutliersZscoreRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief data(1-10): 外れ値なし → 全て0.0
+/// @brief data(1-10): no outliers -> all 0.0
 TEST_F(WindowFunctions, OutliersZscoreNoOutliers) {
     std::string sql = "SELECT stat_outliers_zscore(val)";
     sql += kFullFrame;
@@ -421,7 +421,7 @@ TEST_F(WindowFunctions, OutliersZscoreNoOutliers) {
 // 22. stat_outliers_mzscore
 // =====================================================================
 
-/// @brief 正常系: 修正Zスコア外れ値検出(10行返却)
+/// @brief Normal case: modified z-score outlier detection (10 rows returned)
 TEST_F(WindowFunctions, OutliersMzscoreRowCount) {
     std::string sql = "SELECT stat_outliers_mzscore(val)";
     sql += kFullFrame;
@@ -430,7 +430,7 @@ TEST_F(WindowFunctions, OutliersMzscoreRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief data(1-10): 外れ値なし → 全て0.0
+/// @brief data(1-10): no outliers -> all 0.0
 TEST_F(WindowFunctions, OutliersMzscoreNoOutliers) {
     std::string sql = "SELECT stat_outliers_mzscore(val)";
     sql += kFullFrame;
@@ -447,7 +447,7 @@ TEST_F(WindowFunctions, OutliersMzscoreNoOutliers) {
 // 23. stat_winsorize
 // =====================================================================
 
-/// @brief 正常系: ウィンソライズ(10行返却)
+/// @brief Normal case: winsorization (10 rows returned)
 TEST_F(WindowFunctions, WinsorizeRowCount) {
     std::string sql = "SELECT stat_winsorize(val, 10)";
     sql += kFullFrame;
@@ -456,7 +456,7 @@ TEST_F(WindowFunctions, WinsorizeRowCount) {
     EXPECT_EQ(results.size(), 10u);
 }
 
-/// @brief 結果に有限値が含まれる
+/// @brief The result contains finite values
 TEST_F(WindowFunctions, WinsorizeHasFiniteValues) {
     std::string sql = "SELECT stat_winsorize(val, 10)";
     sql += kFullFrame;
@@ -472,12 +472,12 @@ TEST_F(WindowFunctions, WinsorizeHasFiniteValues) {
 // =====================================================================
 // 24-26. stat_bonferroni / stat_bh_correction / stat_holm_correction
 //
-// 多重比較補正. 期待値は R 4.4.2 の p.adjust() の実測値を使用する.
-// 単調性の強制を伴うため, 1行ずつ独立に評価するスカラー形式では
-// 表現できず, 全行を収集するウィンドウ関数として実装している.
+// Multiple testing corrections. Expected values are measured from R 4.4.2 p.adjust().
+// Enforcing monotonicity means a scalar form evaluating one row at a time cannot
+// express these, so they are implemented as window functions collecting every row.
 // =====================================================================
 
-/// @brief 補正テスト用の p 値テーブルを作成する
+/// @brief Create a p-value table for the correction tests
 static void create_pvalue_table(sqlite3* db, const char* name,
                                  const char* values) {
     std::string sql = "CREATE TABLE ";
@@ -491,7 +491,7 @@ static void create_pvalue_table(sqlite3* db, const char* name,
     exec_sql(db, sql.c_str());
 }
 
-/// @brief 補正関数をフルフレームのウィンドウ関数として実行する
+/// @brief Run a correction as a window function over the full frame
 static std::vector<double> run_correction(sqlite3* db, const char* func,
                                            const char* table) {
     std::string sql = "SELECT ";
@@ -504,8 +504,8 @@ static std::vector<double> run_correction(sqlite3* db, const char* func,
     return query_doubles(db, sql.c_str());
 }
 
-/// @brief 回帰: 単調性補正が必要なケース. 旧スカラー実装は 0.12/0.0615/0.042 を
-///        返していたが, R の p.adjust(method="BH") は全て 0.042 である.
+/// @brief Regression: a case needing the monotonicity step. The old scalar form
+///        returned 0.12/0.0615/0.042, whereas R p.adjust(method="BH") gives 0.042 throughout.
 TEST_F(WindowFunctions, BhCorrectionEnforcesMonotonicity) {
     create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
     auto r = run_correction(db_, "stat_bh_correction", "pv");
@@ -515,8 +515,8 @@ TEST_F(WindowFunctions, BhCorrectionEnforcesMonotonicity) {
     EXPECT_NEAR(r[2], 0.042, 1e-9);
 }
 
-/// @brief 回帰: 旧スカラー実装は最大p値に 0.042 を返し偽陽性を生んでいたが,
-///        R の p.adjust(method="holm") は全て 0.12 である.
+/// @brief Regression: the old scalar form returned 0.042 for the largest p-value,
+///        producing a false positive; R p.adjust(method="holm") gives 0.12 throughout.
 TEST_F(WindowFunctions, HolmCorrectionEnforcesMonotonicity) {
     create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
     auto r = run_correction(db_, "stat_holm_correction", "pv");
@@ -526,7 +526,7 @@ TEST_F(WindowFunctions, HolmCorrectionEnforcesMonotonicity) {
     EXPECT_NEAR(r[2], 0.12, 1e-9);
 }
 
-/// @brief 正常系: BH補正が R の p.adjust(c(0.001,0.5,0.9),"BH") と一致する
+/// @brief Normal case: BH correction matches R p.adjust(c(0.001,0.5,0.9),"BH")
 TEST_F(WindowFunctions, BhCorrectionMatchesR) {
     create_pvalue_table(db_, "pv", "(0.001),(0.5),(0.9)");
     auto r = run_correction(db_, "stat_bh_correction", "pv");
@@ -536,7 +536,7 @@ TEST_F(WindowFunctions, BhCorrectionMatchesR) {
     EXPECT_NEAR(r[2], 0.90, 1e-9);
 }
 
-/// @brief 正常系: Holm補正が R の p.adjust(c(0.001,0.5,0.9),"holm") と一致する
+/// @brief Normal case: Holm correction matches R p.adjust(c(0.001,0.5,0.9),"holm")
 TEST_F(WindowFunctions, HolmCorrectionMatchesR) {
     create_pvalue_table(db_, "pv", "(0.001),(0.5),(0.9)");
     auto r = run_correction(db_, "stat_holm_correction", "pv");
@@ -546,7 +546,7 @@ TEST_F(WindowFunctions, HolmCorrectionMatchesR) {
     EXPECT_NEAR(r[2], 1.0, 1e-9);
 }
 
-/// @brief 正常系: Bonferroni補正(ウィンドウ版)が R と一致する
+/// @brief Normal case: Bonferroni correction (window form) matches R
 TEST_F(WindowFunctions, BonferroniWindowMatchesR) {
     create_pvalue_table(db_, "pv", "(0.040),(0.041),(0.042)");
     auto r = run_correction(db_, "stat_bonferroni", "pv");
@@ -556,7 +556,7 @@ TEST_F(WindowFunctions, BonferroniWindowMatchesR) {
     EXPECT_NEAR(r[2], 0.126, 1e-9);
 }
 
-/// @brief 正常系: 1.0 で打ち切られる(Bonferroni, R と一致)
+/// @brief Normal case: clamped at 1.0 (Bonferroni, matching R)
 TEST_F(WindowFunctions, BonferroniWindowClampsAtOne) {
     create_pvalue_table(db_, "pv", "(0.5),(0.6),(0.7)");
     auto r = run_correction(db_, "stat_bonferroni", "pv");
@@ -564,22 +564,22 @@ TEST_F(WindowFunctions, BonferroniWindowClampsAtOne) {
     for (const auto& v : r) EXPECT_NEAR(v, 1.0, 1e-9);
 }
 
-/// @brief 単調性: BH/Holm ともに p 値の順序と補正値の順序が一致する
+/// @brief Monotonicity: for both BH and Holm the corrected values follow the p-value order
 TEST_F(WindowFunctions, CorrectionsAreMonotone) {
     create_pvalue_table(db_, "pv",
                         "(0.001),(0.008),(0.039),(0.041),(0.042),(0.6),(0.99)");
     for (const char* func : {"stat_bh_correction", "stat_holm_correction"}) {
         auto r = run_correction(db_, func, "pv");
         ASSERT_EQ(r.size(), 7u) << func;
-        // 入力を昇順で投入しているため, 補正値も非減少でなければならない
+        // The input is inserted in ascending order, so the corrections must be non-decreasing
         for (std::size_t i = 1; i < r.size(); ++i) {
             EXPECT_LE(r[i - 1], r[i] + 1e-12)
-                << func << ": index " << i << " で単調性が崩れている";
+                << func << ": monotonicity broken at index " << i;
         }
     }
 }
 
-/// @brief 境界値: 単一行では補正されず元の p 値がそのまま返る
+/// @brief Boundary: with a single row nothing is corrected and the p-value is returned as is
 TEST_F(WindowFunctions, CorrectionSingleRowIsUnchanged) {
     create_pvalue_table(db_, "pv", "(0.03)");
     for (const char* func : {"stat_bonferroni", "stat_bh_correction",
@@ -590,19 +590,19 @@ TEST_F(WindowFunctions, CorrectionSingleRowIsUnchanged) {
     }
 }
 
-/// @brief 異常系: NULL 行は NULL のまま残り, 補正の母数からも除外される
+/// @brief Error case: NULL rows stay NULL and are excluded from the correction
 TEST_F(WindowFunctions, CorrectionPreservesNulls) {
     create_pvalue_table(db_, "pv", "(0.001),(NULL),(0.5),(0.9)");
     auto r = run_correction(db_, "stat_bh_correction", "pv");
     ASSERT_EQ(r.size(), 4u);
-    EXPECT_TRUE(std::isnan(r[1])) << "NULL 行は NULL を返すべき";
-    // NULL を除いた 3 件で補正されるため, NULL 無しの場合と同じ値になる
+    EXPECT_TRUE(std::isnan(r[1])) << "a NULL row should return NULL";
+    // Only the 3 non-NULL values are corrected, giving the same result as without the NULL
     EXPECT_NEAR(r[0], 0.003, 1e-9);
     EXPECT_NEAR(r[2], 0.75, 1e-9);
     EXPECT_NEAR(r[3], 0.90, 1e-9);
 }
 
-/// @brief 異常系: 全行 NULL の場合は全行 NULL を返す
+/// @brief Error case: all rows NULL returns NULL for every row
 TEST_F(WindowFunctions, CorrectionAllNullsReturnsNull) {
     create_pvalue_table(db_, "pv", "(NULL),(NULL)");
     auto r = run_correction(db_, "stat_bh_correction", "pv");

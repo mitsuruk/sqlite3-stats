@@ -956,8 +956,8 @@ int main() {
         "SELECT stat_anova1(val, CAST(grp AS REAL)) FROM grp_data;",
         "\n[124] stat_anova1 — one-way ANOVA");
 
-    // 群列パターン: 3群データを用意して検定・事後検定を実演する
-    // 期待値は R 4.4.2 の実測値
+    // Group-column form: set up three groups and demonstrate the tests and post-hoc tests
+    // Expected values are measured against R 4.4.2
     exec_sql(db, "CREATE TABLE g3(val REAL, grp REAL);", nullptr);
     exec_sql(db,
         "INSERT INTO g3 VALUES"
@@ -984,16 +984,16 @@ int main() {
     exec_sql(db,
         "SELECT json_extract(stat_tukey_hsd(val, grp), '$.comparisons[0].p_value') "
         "FROM g3;",
-        "\n[124e] stat_tukey_hsd — 群0 vs 群1 の調整済み p 値");
+        "\n[124e] stat_tukey_hsd — adjusted p-value, group 0 vs group 1");
 
     exec_sql(db,
         "SELECT json_array_length(stat_dunnett_posthoc(val, grp, 0), "
         "'$.comparisons') FROM g3;",
-        "\n[124f] stat_dunnett_posthoc — 対照群比較なので k-1 = 2 件");
+        "\n[124f] stat_dunnett_posthoc — control comparisons only, so k-1 = 2");
 
     exec_sql(db,
         "SELECT json_array_length(stat_stratified_sample(val, grp, 0.4)) FROM g3;",
-        "\n[124g] stat_stratified_sample — 各群 5 件の 40% = 計 6 件");
+        "\n[124g] stat_stratified_sample — 40% of 5 rows per group = 6 in total");
 
     exec_sql(db,
         "SELECT stat_contingency_table(x, y) FROM cat_data;",
@@ -1143,8 +1143,8 @@ int main() {
         "\n[168] stat_z_test_prop2(30/100 vs 40/100)");
 
     // Multiple testing
-    // BH / Holm は p 値集合全体で単調性を強制するためウィンドウ関数として提供する.
-    // 期待値は R の p.adjust(c(0.040,0.041,0.042), method=...) と一致する.
+    // BH and Holm enforce monotonicity over the whole set of p-values, so they are
+    // window functions. Expected values match R's p.adjust(c(0.040,0.041,0.042), ...)
     exec_sql(db, "SELECT stat_bonferroni(0.03, 5);",
         "\n[169] stat_bonferroni(p=0.03, m=5) — min(0.15, 1)");
     exec_sql(db,
@@ -1152,13 +1152,13 @@ int main() {
         "SELECT p, stat_bh_correction(p) OVER ("
         "ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
         ") AS bh FROM pv;",
-        "\n[170] stat_bh_correction — R: 全て 0.042");
+        "\n[170] stat_bh_correction — R: 0.042 throughout");
     exec_sql(db,
         "WITH pv(id, p) AS (VALUES (1,0.040),(2,0.041),(3,0.042)) "
         "SELECT p, stat_holm_correction(p) OVER ("
         "ORDER BY id ROWS BETWEEN UNBOUNDED PRECEDING AND UNBOUNDED FOLLOWING"
         ") AS holm FROM pv;",
-        "\n[171] stat_holm_correction — R: 全て 0.12");
+        "\n[171] stat_holm_correction — R: 0.12 throughout");
 
     // Categorical
     exec_sql(db, "SELECT stat_fisher_exact(10, 5, 3, 12);",

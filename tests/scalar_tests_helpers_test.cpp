@@ -1,179 +1,179 @@
 /**
  * @file scalar_tests_helpers_test.cpp
- * @brief スカラー統計関数(40関数)のテスト
+ * @brief Tests for the scalar statistical functions (38 functions)
  *
- * 正規分布, カイ二乗分布, t分布, F分布, 特殊関数,
- * 比率検定, 多重比較補正, Fisher正確検定・リスク,
- * 比率の信頼区間, モデル選択, Box-Cox変換の各スカラー関数を検証する.
+ * Verifies the normal, chi-square, t and F distributions, the special functions,
+ * proportion tests, multiple testing corrections, Fisher's exact test and risk
+ * measures, proportion confidence intervals, model selection and the Box-Cox transform.
  */
 
 #include "test_helpers.hpp"
 
-/// @brief スカラー統計関数テスト用フィクスチャ
+/// @brief Fixture for the scalar statistical function tests
 class ScalarTestsHelpers : public StatFuncTest {};
 
 // =====================================================================
-// 正規分布 (4関数)
+// Normal distribution (4 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_normal_pdf(0) → 標準正規のPDF, 約0.398942
+/// @brief Normal case: stat_normal_pdf(0) -> standard normal PDF, about 0.398942
 TEST_F(ScalarTestsHelpers, NormalPdfStandard) {
     double result = query_double(db_, "SELECT stat_normal_pdf(0)");
     EXPECT_NEAR(result, 0.398942, 1e-4);
 }
 
-/// @brief 正常系: stat_normal_pdf(x, mu, sigma) 3引数形式
+/// @brief Normal case: stat_normal_pdf(x, mu, sigma), the three-argument form
 TEST_F(ScalarTestsHelpers, NormalPdfWithParams) {
     double result = query_double(db_, "SELECT stat_normal_pdf(0, 0, 1)");
     EXPECT_NEAR(result, 0.398942, 1e-4);
 }
 
-/// @brief 正常系: stat_normal_cdf(1.96) → 約0.975
+/// @brief Normal case: stat_normal_cdf(1.96) -> about 0.975
 TEST_F(ScalarTestsHelpers, NormalCdf) {
     double result = query_double(db_, "SELECT stat_normal_cdf(1.96)");
     EXPECT_NEAR(result, 0.975, 1e-3);
 }
 
-/// @brief 正常系: stat_normal_quantile(0.975) → 約1.96
+/// @brief Normal case: stat_normal_quantile(0.975) -> about 1.96
 TEST_F(ScalarTestsHelpers, NormalQuantile) {
     double result = query_double(db_, "SELECT stat_normal_quantile(0.975)");
     EXPECT_NEAR(result, 1.96, 1e-2);
 }
 
-/// @brief 正常系: stat_normal_rand() → NULLでない(非決定的)
+/// @brief Normal case: stat_normal_rand() -> not NULL (non-deterministic)
 TEST_F(ScalarTestsHelpers, NormalRand) {
     EXPECT_FALSE(query_is_null(db_, "SELECT stat_normal_rand()"));
 }
 
 // =====================================================================
-// カイ二乗分布 (4関数)
+// Chi-square distribution (4 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_chisq_pdf(5, 3) → 有限の正値
+/// @brief Normal case: stat_chisq_pdf(5, 3) -> a finite positive value
 TEST_F(ScalarTestsHelpers, ChisqPdf) {
     double result = query_double(db_, "SELECT stat_chisq_pdf(5, 3)");
     EXPECT_TRUE(std::isfinite(result));
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 正常系: stat_chisq_cdf(7.815, 3) → 約0.95
+/// @brief Normal case: stat_chisq_cdf(7.815, 3) -> about 0.95
 TEST_F(ScalarTestsHelpers, ChisqCdf) {
     double result = query_double(db_, "SELECT stat_chisq_cdf(7.815, 3)");
     EXPECT_NEAR(result, 0.95, 1e-2);
 }
 
-/// @brief 正常系: stat_chisq_quantile(0.95, 3) → 約7.815
+/// @brief Normal case: stat_chisq_quantile(0.95, 3) -> about 7.815
 TEST_F(ScalarTestsHelpers, ChisqQuantile) {
     double result = query_double(db_, "SELECT stat_chisq_quantile(0.95, 3)");
     EXPECT_NEAR(result, 7.815, 1e-2);
 }
 
-/// @brief 正常系: stat_chisq_rand(5) → NULLでない(非決定的)
+/// @brief Normal case: stat_chisq_rand(5) -> not NULL (non-deterministic)
 TEST_F(ScalarTestsHelpers, ChisqRand) {
     EXPECT_FALSE(query_is_null(db_, "SELECT stat_chisq_rand(5)"));
 }
 
 // =====================================================================
-// t分布 (4関数)
+// t distribution (4 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_t_pdf(0, 10) → 有限の正値
+/// @brief Normal case: stat_t_pdf(0, 10) -> a finite positive value
 TEST_F(ScalarTestsHelpers, TPdf) {
     double result = query_double(db_, "SELECT stat_t_pdf(0, 10)");
     EXPECT_TRUE(std::isfinite(result));
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 正常系: stat_t_cdf(2.228, 10) → 約0.975
+/// @brief Normal case: stat_t_cdf(2.228, 10) -> about 0.975
 TEST_F(ScalarTestsHelpers, TCdf) {
     double result = query_double(db_, "SELECT stat_t_cdf(2.228, 10)");
     EXPECT_NEAR(result, 0.975, 1e-2);
 }
 
-/// @brief 正常系: stat_t_quantile(0.975, 10) → 約2.228
+/// @brief Normal case: stat_t_quantile(0.975, 10) -> about 2.228
 TEST_F(ScalarTestsHelpers, TQuantile) {
     double result = query_double(db_, "SELECT stat_t_quantile(0.975, 10)");
     EXPECT_NEAR(result, 2.228, 1e-2);
 }
 
-/// @brief 正常系: stat_t_rand(10) → NULLでない(非決定的)
+/// @brief Normal case: stat_t_rand(10) -> not NULL (non-deterministic)
 TEST_F(ScalarTestsHelpers, TRand) {
     EXPECT_FALSE(query_is_null(db_, "SELECT stat_t_rand(10)"));
 }
 
 // =====================================================================
-// F分布 (4関数)
+// F distribution (4 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_f_pdf(1, 5, 10) → 有限の正値
+/// @brief Normal case: stat_f_pdf(1, 5, 10) -> a finite positive value
 TEST_F(ScalarTestsHelpers, FPdf) {
     double result = query_double(db_, "SELECT stat_f_pdf(1, 5, 10)");
     EXPECT_TRUE(std::isfinite(result));
     EXPECT_GT(result, 0.0);
 }
 
-/// @brief 正常系: stat_f_cdf(3.326, 5, 10) → 約0.95
+/// @brief Normal case: stat_f_cdf(3.326, 5, 10) -> about 0.95
 TEST_F(ScalarTestsHelpers, FCdf) {
     double result = query_double(db_, "SELECT stat_f_cdf(3.326, 5, 10)");
     EXPECT_NEAR(result, 0.95, 1e-2);
 }
 
-/// @brief 正常系: stat_f_quantile(0.95, 5, 10) → 約3.326
+/// @brief Normal case: stat_f_quantile(0.95, 5, 10) -> about 3.326
 TEST_F(ScalarTestsHelpers, FQuantile) {
     double result = query_double(db_, "SELECT stat_f_quantile(0.95, 5, 10)");
     EXPECT_NEAR(result, 3.326, 1e-2);
 }
 
-/// @brief 正常系: stat_f_rand(5, 10) → NULLでない(非決定的)
+/// @brief Normal case: stat_f_rand(5, 10) -> not NULL (non-deterministic)
 TEST_F(ScalarTestsHelpers, FRand) {
     EXPECT_FALSE(query_is_null(db_, "SELECT stat_f_rand(5, 10)"));
 }
 
 // =====================================================================
-// 特殊関数 (7関数)
+// Special functions (7 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_betainc(1.0, 1.0, 0.5) → 0.5
+/// @brief Normal case: stat_betainc(1.0, 1.0, 0.5) -> 0.5
 TEST_F(ScalarTestsHelpers, BetaInc) {
     double result = query_double(
         db_, "SELECT stat_betainc(1.0, 1.0, 0.5)");
     EXPECT_NEAR(result, 0.5, 1e-4);
 }
 
-/// @brief 正常系: stat_betaincinv(1.0, 1.0, 0.5) → 0.5
+/// @brief Normal case: stat_betaincinv(1.0, 1.0, 0.5) -> 0.5
 TEST_F(ScalarTestsHelpers, BetaIncInv) {
     double result = query_double(
         db_, "SELECT stat_betaincinv(1.0, 1.0, 0.5)");
     EXPECT_NEAR(result, 0.5, 1e-4);
 }
 
-/// @brief 正常系: stat_norm_cdf(0) → 0.5
+/// @brief Normal case: stat_norm_cdf(0) -> 0.5
 TEST_F(ScalarTestsHelpers, NormCdf) {
     double result = query_double(db_, "SELECT stat_norm_cdf(0)");
     EXPECT_NEAR(result, 0.5, 1e-4);
 }
 
-/// @brief 正常系: stat_norm_quantile(0.5) → 0.0
+/// @brief Normal case: stat_norm_quantile(0.5) -> 0.0
 TEST_F(ScalarTestsHelpers, NormQuantile) {
     double result = query_double(db_, "SELECT stat_norm_quantile(0.5)");
     EXPECT_NEAR(result, 0.0, 1e-4);
 }
 
-/// @brief 正常系: stat_gammainc_lower(1.0, 1.0) → 約0.632121
+/// @brief Normal case: stat_gammainc_lower(1.0, 1.0) -> about 0.632121
 TEST_F(ScalarTestsHelpers, GammaIncLower) {
     double result = query_double(
         db_, "SELECT stat_gammainc_lower(1.0, 1.0)");
     EXPECT_NEAR(result, 0.632121, 1e-4);
 }
 
-/// @brief 正常系: stat_gammainc_upper(1.0, 1.0) → 約0.367879
+/// @brief Normal case: stat_gammainc_upper(1.0, 1.0) -> about 0.367879
 TEST_F(ScalarTestsHelpers, GammaIncUpper) {
     double result = query_double(
         db_, "SELECT stat_gammainc_upper(1.0, 1.0)");
     EXPECT_NEAR(result, 0.367879, 1e-4);
 }
 
-/// @brief 正常系: stat_gammainc_lower_inv(1.0, 0.5) → 約0.693147
+/// @brief Normal case: stat_gammainc_lower_inv(1.0, 0.5) -> about 0.693147
 TEST_F(ScalarTestsHelpers, GammaIncLowerInv) {
     double result = query_double(
         db_, "SELECT stat_gammainc_lower_inv(1.0, 0.5)");
@@ -181,10 +181,10 @@ TEST_F(ScalarTestsHelpers, GammaIncLowerInv) {
 }
 
 // =====================================================================
-// 比率検定 (2関数) - JSON返却
+// Proportion tests (2 functions) - return JSON
 // =====================================================================
 
-/// @brief 正常系: stat_z_test_prop(50, 100, 0.5) → statistic=0, p_value=1.0
+/// @brief Normal case: stat_z_test_prop(50, 100, 0.5) -> statistic=0, p_value=1.0
 TEST_F(ScalarTestsHelpers, ZTestProp) {
     std::string json = query_text(
         db_, "SELECT stat_z_test_prop(50, 100, 0.5)");
@@ -195,7 +195,7 @@ TEST_F(ScalarTestsHelpers, ZTestProp) {
     EXPECT_NEAR(p_value, 1.0, 1e-4);
 }
 
-/// @brief 正常系: stat_z_test_prop2(30, 100, 50, 100) → JSON(有限値)
+/// @brief Normal case: stat_z_test_prop2(30, 100, 50, 100) -> JSON with finite values
 TEST_F(ScalarTestsHelpers, ZTestProp2) {
     std::string json = query_text(
         db_, "SELECT stat_z_test_prop2(30, 100, 50, 100)");
@@ -209,30 +209,30 @@ TEST_F(ScalarTestsHelpers, ZTestProp2) {
 }
 
 // =====================================================================
-// 多重比較補正 (1関数 — BH/Holm はウィンドウ関数へ移動)
+// Multiple testing corrections (1 function - BH and Holm moved to window functions)
 // =====================================================================
 
-/// @brief 正常系: stat_bonferroni(0.01, 5) → 0.05
+/// @brief Normal case: stat_bonferroni(0.01, 5) -> 0.05
 TEST_F(ScalarTestsHelpers, Bonferroni) {
     double result = query_double(db_, "SELECT stat_bonferroni(0.01, 5)");
     EXPECT_NEAR(result, 0.05, 1e-4);
 }
 
-/// @brief 境界値: stat_bonferroni は 1.0 で打ち切る
+/// @brief Boundary: stat_bonferroni clamps at 1.0
 TEST_F(ScalarTestsHelpers, BonferroniClampsAtOne) {
     double result = query_double(db_, "SELECT stat_bonferroni(0.5, 10)");
     EXPECT_NEAR(result, 1.0, 1e-9);
 }
 
-// BH / Holm 補正は単調性の強制に p 値集合全体を必要とするため,
-// スカラー形式では提供しない. ウィンドウ関数版のテストは
-// window_functions_test.cpp を参照.
+// BH and Holm corrections need the whole set of p-values to enforce monotonicity,
+// so no scalar form is provided. Their window-function tests live in
+// window_functions_test.cpp.
 
 // =====================================================================
-// Fisher正確検定・リスク (5関数)
+// Fisher's exact test and risk measures (5 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_fisher_exact(10, 5, 3, 12) → JSON(p_valueが有限)
+/// @brief Normal case: stat_fisher_exact(10, 5, 3, 12) -> JSON with a finite p_value
 TEST_F(ScalarTestsHelpers, FisherExact) {
     std::string json = query_text(
         db_, "SELECT stat_fisher_exact(10, 5, 3, 12)");
@@ -243,7 +243,7 @@ TEST_F(ScalarTestsHelpers, FisherExact) {
     EXPECT_LE(p_value, 1.0);
 }
 
-/// @brief 正常系: stat_odds_ratio(10, 5, 3, 12) → JSON返却, odds_ratio = 8.0
+/// @brief Normal case: stat_odds_ratio(10, 5, 3, 12) -> JSON, odds_ratio = 8.0
 TEST_F(ScalarTestsHelpers, OddsRatio) {
     std::string json = query_text(
         db_, "SELECT stat_odds_ratio(10, 5, 3, 12)");
@@ -252,7 +252,7 @@ TEST_F(ScalarTestsHelpers, OddsRatio) {
     EXPECT_NEAR(odds_ratio, 8.0, 1e-4);
 }
 
-/// @brief 正常系: stat_relative_risk(10, 5, 3, 12) → JSON返却, relative_risk ≈ 3.333
+/// @brief Normal case: stat_relative_risk(10, 5, 3, 12) -> JSON, relative_risk ~ 3.333
 TEST_F(ScalarTestsHelpers, RelativeRisk) {
     std::string json = query_text(
         db_, "SELECT stat_relative_risk(10, 5, 3, 12)");
@@ -261,7 +261,7 @@ TEST_F(ScalarTestsHelpers, RelativeRisk) {
     EXPECT_NEAR(rr, 10.0 / 3.0, 1e-4);
 }
 
-/// @brief 正常系: stat_risk_difference(10, 5, 3, 12) → JSON返却, risk_difference ≈ 0.467
+/// @brief Normal case: stat_risk_difference(10, 5, 3, 12) -> JSON, risk_difference ~ 0.467
 TEST_F(ScalarTestsHelpers, RiskDifference) {
     std::string json = query_text(
         db_, "SELECT stat_risk_difference(10, 5, 3, 12)");
@@ -270,7 +270,7 @@ TEST_F(ScalarTestsHelpers, RiskDifference) {
     EXPECT_NEAR(rd, 7.0 / 15.0, 1e-4);
 }
 
-/// @brief 正常系: stat_nnt(10, 5, 3, 12) → 1/risk_difference ≈ 2.143
+/// @brief Normal case: stat_nnt(10, 5, 3, 12) -> 1/risk_difference ~ 2.143
 TEST_F(ScalarTestsHelpers, Nnt) {
     double result = query_double(
         db_, "SELECT stat_nnt(10, 5, 3, 12)");
@@ -278,10 +278,10 @@ TEST_F(ScalarTestsHelpers, Nnt) {
 }
 
 // =====================================================================
-// 比率の信頼区間 (3関数) - JSON返却
+// Proportion confidence intervals (3 functions) - return JSON
 // =====================================================================
 
-/// @brief 正常系: stat_ci_prop(50, 100, 0.95) → lower/upperが0-1の範囲
+/// @brief Normal case: stat_ci_prop(50, 100, 0.95) -> lower and upper within 0-1
 TEST_F(ScalarTestsHelpers, CiProp) {
     std::string json = query_text(
         db_, "SELECT stat_ci_prop(50, 100, 0.95)");
@@ -293,7 +293,7 @@ TEST_F(ScalarTestsHelpers, CiProp) {
     EXPECT_LT(lower, upper);
 }
 
-/// @brief 正常系: stat_ci_prop_wilson(50, 100, 0.95) → lower/upperが0-1の範囲
+/// @brief Normal case: stat_ci_prop_wilson(50, 100, 0.95) -> lower and upper within 0-1
 TEST_F(ScalarTestsHelpers, CiPropWilson) {
     std::string json = query_text(
         db_, "SELECT stat_ci_prop_wilson(50, 100, 0.95)");
@@ -305,7 +305,7 @@ TEST_F(ScalarTestsHelpers, CiPropWilson) {
     EXPECT_LT(lower, upper);
 }
 
-/// @brief 正常系: stat_ci_prop_diff(30, 100, 50, 100, 0.95) → JSON(有限値)
+/// @brief Normal case: stat_ci_prop_diff(30, 100, 50, 100, 0.95) -> JSON with finite values
 TEST_F(ScalarTestsHelpers, CiPropDiff) {
     std::string json = query_text(
         db_, "SELECT stat_ci_prop_diff(30, 100, 50, 100, 0.95)");
@@ -318,23 +318,23 @@ TEST_F(ScalarTestsHelpers, CiPropDiff) {
 }
 
 // =====================================================================
-// モデル選択 (3関数)
+// Model selection (3 functions)
 // =====================================================================
 
-/// @brief 正常系: stat_aic(-100, 3) → -2*(-100) + 2*3 = 206.0
+/// @brief Normal case: stat_aic(-100, 3) -> -2*(-100) + 2*3 = 206.0
 TEST_F(ScalarTestsHelpers, Aic) {
     double result = query_double(db_, "SELECT stat_aic(-100, 3)");
     EXPECT_NEAR(result, 206.0, 1e-4);
 }
 
-/// @brief 正常系: stat_aicc(-100, 50, 3) → 206 + 2*3*(3+1)/(50-3-1) ≈ 206.261
+/// @brief Normal case: stat_aicc(-100, 50, 3) -> 206 + 2*3*(3+1)/(50-3-1) ~ 206.261
 TEST_F(ScalarTestsHelpers, Aicc) {
     double result = query_double(db_, "SELECT stat_aicc(-100, 50, 3)");
     double expected = 206.0 + 2.0 * 3.0 * 4.0 / 46.0;
     EXPECT_NEAR(result, expected, 1e-2);
 }
 
-/// @brief 正常系: stat_bic(-100, 50, 3) → -2*(-100) + 3*log(50) ≈ 211.733
+/// @brief Normal case: stat_bic(-100, 50, 3) -> -2*(-100) + 3*log(50) ~ 211.733
 TEST_F(ScalarTestsHelpers, Bic) {
     double result = query_double(db_, "SELECT stat_bic(-100, 50, 3)");
     double expected = 200.0 + 3.0 * std::log(50.0);
@@ -342,22 +342,22 @@ TEST_F(ScalarTestsHelpers, Bic) {
 }
 
 // =====================================================================
-// Box-Cox変換 (1関数)
+// Box-Cox transform (1 function)
 // =====================================================================
 
-/// @brief 正常系: stat_boxcox(2.0, 1.0) → x-1 = 1.0 (λ=1)
+/// @brief Normal case: stat_boxcox(2.0, 1.0) -> x-1 = 1.0 (lambda=1)
 TEST_F(ScalarTestsHelpers, BoxCoxLambda1) {
     double result = query_double(db_, "SELECT stat_boxcox(2.0, 1.0)");
     EXPECT_NEAR(result, 1.0, 1e-4);
 }
 
-/// @brief 正常系: stat_boxcox(2.0, 0.0) → log(2) ≈ 0.693147 (λ=0)
+/// @brief Normal case: stat_boxcox(2.0, 0.0) -> log(2) ~ 0.693147 (lambda=0)
 TEST_F(ScalarTestsHelpers, BoxCoxLambda0) {
     double result = query_double(db_, "SELECT stat_boxcox(2.0, 0.0)");
     EXPECT_NEAR(result, 0.693147, 1e-4);
 }
 
-/// @brief 正常系: stat_boxcox(2.0, 2.0) → (2^2 - 1)/2 = 1.5 (λ=2)
+/// @brief Normal case: stat_boxcox(2.0, 2.0) -> (2^2 - 1)/2 = 1.5 (lambda=2)
 TEST_F(ScalarTestsHelpers, BoxCoxLambda2) {
     double result = query_double(db_, "SELECT stat_boxcox(2.0, 2.0)");
     EXPECT_NEAR(result, 1.5, 1e-4);

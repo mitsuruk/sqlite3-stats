@@ -1,41 +1,41 @@
 /**
  * @file complex_aggregates_test.cpp
- * @brief 複合集約統計関数(32関数)のテスト
+ * @brief Tests for the complex aggregate functions (41 functions)
  *
- * 基本統計量(複数結果), 度数分布, 2標本検定, 分散分析, 分割表,
- * 効果量, CI差, 生存分析, リサンプリング, 時系列, サンプリング
- * の各関数について,正常値・空テーブルを検証する.
+ * Verifies normal values and empty tables for basic statistics with multiple
+ * results, frequency distributions, two-sample tests, analysis of variance,
+ * contingency tables, effect sizes, CI differences, survival analysis, resampling,
  */
 
 #include "test_helpers.hpp"
 
-/// @brief 複合集約統計関数テスト用フィクスチャ
+/// @brief Fixture for the complex aggregate function tests
 class ComplexAggregates : public StatFuncTest {};
 
 // =====================================================================
-// 1. stat_modes (JSON返却)
+// 1. stat_modes (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: data2の最頻値 → [3.0]
+/// @brief Normal case: the mode of data2 -> [3.0]
 TEST_F(ComplexAggregates, ModesNormal) {
     std::string result = query_text(
         db_, "SELECT stat_modes(val) FROM data2");
     EXPECT_FALSE(result.empty());
-    // 整数値の場合 "[3]" が返る
+    // Integer values come back as "[3]"
     EXPECT_EQ(result, "[3]");
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, ModesEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_modes(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 2. stat_five_number_summary (JSON返却)
+// 2. stat_five_number_summary (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: data(1-10)の五数要約
+/// @brief Normal case: five-number summary of data(1-10)
 TEST_F(ComplexAggregates, FiveNumberSummaryNormal) {
     std::string result = query_text(
         db_, "SELECT stat_five_number_summary(val) FROM data");
@@ -54,102 +54,102 @@ TEST_F(ComplexAggregates, FiveNumberSummaryNormal) {
     EXPECT_NEAR(max_val, 10.0, 1e-4);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, FiveNumberSummaryEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_five_number_summary(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 3. stat_frequency_table (JSON返却)
+// 3. stat_frequency_table (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 度数分布表が空でないJSON文字列
+/// @brief Normal case: the frequency table is a non-empty JSON string
 TEST_F(ComplexAggregates, FrequencyTableNormal) {
     std::string result = query_text(
         db_, "SELECT stat_frequency_table(val) FROM data2");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, FrequencyTableEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_frequency_table(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 4. stat_frequency_count (JSON返却)
+// 4. stat_frequency_count (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 度数カウントが空でないJSON文字列
+/// @brief Normal case: the frequency count is a non-empty JSON string
 TEST_F(ComplexAggregates, FrequencyCountNormal) {
     std::string result = query_text(
         db_, "SELECT stat_frequency_count(val) FROM data2");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, FrequencyCountEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_frequency_count(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 5. stat_relative_frequency (JSON返却)
+// 5. stat_relative_frequency (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 相対度数が空でないJSON文字列
+/// @brief Normal case: the relative frequency is a non-empty JSON string
 TEST_F(ComplexAggregates, RelativeFrequencyNormal) {
     std::string result = query_text(
         db_, "SELECT stat_relative_frequency(val) FROM data2");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, RelativeFrequencyEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_relative_frequency(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 6. stat_cumulative_frequency (JSON返却)
+// 6. stat_cumulative_frequency (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 累積度数が空でないJSON文字列
+/// @brief Normal case: the cumulative frequency is a non-empty JSON string
 TEST_F(ComplexAggregates, CumulativeFrequencyNormal) {
     std::string result = query_text(
         db_, "SELECT stat_cumulative_frequency(val) FROM data2");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, CumulativeFrequencyEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_cumulative_frequency(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 7. stat_cumulative_relative_frequency (JSON返却)
+// 7. stat_cumulative_relative_frequency (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 累積相対度数が空でないJSON文字列
+/// @brief Normal case: the cumulative relative frequency is a non-empty JSON string
 TEST_F(ComplexAggregates, CumulativeRelativeFrequencyNormal) {
     std::string result = query_text(
         db_, "SELECT stat_cumulative_relative_frequency(val) FROM data2");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, CumulativeRelativeFrequencyEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_cumulative_relative_frequency(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 8. stat_t_test2 (JSON返却)
+// 8. stat_t_test2 (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 2群は明確に異なるので p_value < 0.05
+/// @brief Normal case: the two groups differ clearly, so p_value < 0.05
 TEST_F(ComplexAggregates, TTest2Normal) {
     std::string result = query_text(
         db_, "SELECT stat_t_test2(val, grp) FROM grp_data");
@@ -159,17 +159,17 @@ TEST_F(ComplexAggregates, TTest2Normal) {
     EXPECT_LT(p_value, 0.05);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, TTest2Empty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_t_test2(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 9. stat_t_test_welch (JSON返却)
+// 9. stat_t_test_welch (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: Welch t検定でも p_value < 0.05
+/// @brief Normal case: p_value < 0.05 for the Welch t-test as well
 TEST_F(ComplexAggregates, TTestWelchNormal) {
     std::string result = query_text(
         db_, "SELECT stat_t_test_welch(val, grp) FROM grp_data");
@@ -179,17 +179,17 @@ TEST_F(ComplexAggregates, TTestWelchNormal) {
     EXPECT_LT(p_value, 0.05);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, TTestWelchEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_t_test_welch(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 10. stat_f_test (JSON返却)
+// 10. stat_f_test (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: F検定の結果がJSON文字列
+/// @brief Normal case: the F-test result is a non-empty JSON string
 TEST_F(ComplexAggregates, FTestNormal) {
     std::string result = query_text(
         db_, "SELECT stat_f_test(val, grp) FROM grp_data");
@@ -199,17 +199,17 @@ TEST_F(ComplexAggregates, FTestNormal) {
     EXPECT_TRUE(std::isfinite(p_value));
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, FTestEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_f_test(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 11. stat_mann_whitney (JSON返却)
+// 11. stat_mann_whitney (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 2群は明確に異なるので p_value < 0.05
+/// @brief Normal case: the two groups differ clearly, so p_value < 0.05
 TEST_F(ComplexAggregates, MannWhitneyNormal) {
     std::string result = query_text(
         db_, "SELECT stat_mann_whitney(val, grp) FROM grp_data");
@@ -219,34 +219,34 @@ TEST_F(ComplexAggregates, MannWhitneyNormal) {
     EXPECT_LT(p_value, 0.05);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, MannWhitneyEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_mann_whitney(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 12. stat_chisq_independence (JSON返却)
+// 12. stat_chisq_independence (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: カイ二乗独立性検定の結果がJSON文字列
+/// @brief Normal case: the chi-square test of independence is a non-empty JSON string
 TEST_F(ComplexAggregates, ChisqIndependenceNormal) {
     std::string result = query_text(
         db_, "SELECT stat_chisq_independence(val, grp) FROM grp_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, ChisqIndependenceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_chisq_independence(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 13. stat_anova1 (JSON返却)
+// 13. stat_anova1 (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 一元配置分散分析, 2群は明確に異なるので p_value < 0.05
+/// @brief Normal case: one-way ANOVA; the two groups differ clearly, so p_value < 0.05
 TEST_F(ComplexAggregates, Anova1Normal) {
     std::string result = query_text(
         db_, "SELECT stat_anova1(val, grp) FROM grp_data");
@@ -263,34 +263,34 @@ TEST_F(ComplexAggregates, Anova1Normal) {
     EXPECT_TRUE(std::isfinite(df_within));
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, Anova1Empty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_anova1(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 14. stat_contingency_table (JSON返却)
+// 14. stat_contingency_table (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 分割表が空でないJSON文字列
+/// @brief Normal case: the contingency table is a non-empty JSON string
 TEST_F(ComplexAggregates, ContingencyTableNormal) {
     std::string result = query_text(
         db_, "SELECT stat_contingency_table(val, grp) FROM grp_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, ContingencyTableEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_contingency_table(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 15. stat_cohens_d2 (REAL返却)
+// 15. stat_cohens_d2 (returns REAL)
 // =====================================================================
 
-/// @brief 正常系: 2群の Cohen's d (実測値 ≈ 4.304)
+/// @brief Normal case: Cohen's d for two groups (measured value ~ 4.304)
 TEST_F(ComplexAggregates, CohensD2Normal) {
     double result = query_double(
         db_, "SELECT stat_cohens_d2(val, grp) FROM grp_data");
@@ -298,40 +298,40 @@ TEST_F(ComplexAggregates, CohensD2Normal) {
     EXPECT_NEAR(result, 4.304, 0.1);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, CohensD2Empty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_cohens_d2(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 16. stat_hedges_g2 (REAL返却)
+// 16. stat_hedges_g2 (returns REAL)
 // =====================================================================
 
-/// @brief 正常系: Cohen's d に近い値
+/// @brief Normal case: close to Cohen's d
 TEST_F(ComplexAggregates, HedgesG2Normal) {
     double result = query_double(
         db_, "SELECT stat_hedges_g2(val, grp) FROM grp_data");
     EXPECT_TRUE(std::isfinite(result));
     EXPECT_GT(result, 0.0);
 
-    // Cohen's d との比較(補正係数分だけ小さくなる)
+    // Compared with Cohen's d, smaller by the correction factor
     double cohens_d = query_double(
         db_, "SELECT stat_cohens_d2(val, grp) FROM grp_data");
     EXPECT_NEAR(result, cohens_d, 0.5);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, HedgesG2Empty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_hedges_g2(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 17. stat_glass_delta (REAL返却)
+// 17. stat_glass_delta (returns REAL)
 // =====================================================================
 
-/// @brief 正常系: Glass's delta (基準群によって符号が異なる, 実測値 ≈ -3.055)
+/// @brief Normal case: Glass's delta (sign depends on the reference group, measured ~ -3.055)
 TEST_F(ComplexAggregates, GlassDeltaNormal) {
     double result = query_double(
         db_, "SELECT stat_glass_delta(val, grp) FROM grp_data");
@@ -339,17 +339,17 @@ TEST_F(ComplexAggregates, GlassDeltaNormal) {
     EXPECT_NEAR(result, -3.055, 0.1);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, GlassDeltaEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_glass_delta(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 18. stat_ci_mean_diff (JSON返却)
+// 18. stat_ci_mean_diff (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 2群に明確な差があるので lower > 0, upper > 0
+/// @brief Normal case: the groups clearly differ, so lower > 0 and upper > 0
 TEST_F(ComplexAggregates, CiMeanDiffNormal) {
     std::string result = query_text(
         db_, "SELECT stat_ci_mean_diff(val, grp) FROM grp_data");
@@ -361,17 +361,17 @@ TEST_F(ComplexAggregates, CiMeanDiffNormal) {
     EXPECT_GT(upper, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, CiMeanDiffEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_ci_mean_diff(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 19. stat_ci_mean_diff_welch (JSON返却)
+// 19. stat_ci_mean_diff_welch (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: Welch版でも lower > 0, upper > 0
+/// @brief Normal case: lower > 0 and upper > 0 for the Welch form too
 TEST_F(ComplexAggregates, CiMeanDiffWelchNormal) {
     std::string result = query_text(
         db_, "SELECT stat_ci_mean_diff_welch(val, grp) FROM grp_data");
@@ -383,51 +383,51 @@ TEST_F(ComplexAggregates, CiMeanDiffWelchNormal) {
     EXPECT_GT(upper, 0.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, CiMeanDiffWelchEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_ci_mean_diff_welch(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 20. stat_kaplan_meier (JSON返却)
+// 20. stat_kaplan_meier (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: Kaplan-Meier推定が空でないJSON文字列
+/// @brief Normal case: the Kaplan-Meier estimate is a non-empty JSON string
 TEST_F(ComplexAggregates, KaplanMeierNormal) {
     std::string result = query_text(
         db_, "SELECT stat_kaplan_meier(time, event) FROM surv_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, KaplanMeierEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_kaplan_meier(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 21. stat_nelson_aalen (JSON返却)
+// 21. stat_nelson_aalen (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: Nelson-Aalen推定が空でないJSON文字列
+/// @brief Normal case: the Nelson-Aalen estimate is a non-empty JSON string
 TEST_F(ComplexAggregates, NelsonAalenNormal) {
     std::string result = query_text(
         db_, "SELECT stat_nelson_aalen(time, event) FROM surv_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, NelsonAalenEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_nelson_aalen(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 22. stat_logrank (JSON返却)
+// 22. stat_logrank (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: ログランク検定の結果がJSON文字列
+/// @brief Normal case: the log-rank test result is a non-empty JSON string
 TEST_F(ComplexAggregates, LograrkNormal) {
     std::string result = query_text(
         db_, "SELECT stat_logrank(time, event, grp) FROM surv2");
@@ -439,17 +439,17 @@ TEST_F(ComplexAggregates, LograrkNormal) {
     EXPECT_TRUE(std::isfinite(p_value));
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, LograrkEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_logrank(val, val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 23. stat_bootstrap (JSON返却, 非決定的)
+// 23. stat_bootstrap (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: bootstrap推定, estimate ≈ 5.5 (±2.0)
+/// @brief Normal case: bootstrap estimate ~ 5.5 (+/-2.0)
 TEST_F(ComplexAggregates, BootstrapNormal) {
     std::string result = query_text(
         db_, "SELECT stat_bootstrap(val, 500) FROM data");
@@ -462,51 +462,51 @@ TEST_F(ComplexAggregates, BootstrapNormal) {
     EXPECT_NEAR(estimate, 5.5, 2.0);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, BootstrapEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_bootstrap(val, 500) FROM empty_data"));
 }
 
 // =====================================================================
-// 24. stat_bootstrap_bca (JSON返却, 非決定的)
+// 24. stat_bootstrap_bca (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: BCa bootstrap推定が空でないJSON文字列
+/// @brief Normal case: the BCa bootstrap estimate is a non-empty JSON string
 TEST_F(ComplexAggregates, BootstrapBcaNormal) {
     std::string result = query_text(
         db_, "SELECT stat_bootstrap_bca(val, 500) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, BootstrapBcaEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_bootstrap_bca(val, 500) FROM empty_data"));
 }
 
 // =====================================================================
-// 25. stat_bootstrap_sample (JSON返却, 非決定的)
+// 25. stat_bootstrap_sample (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: ブートストラップ標本が空でないJSON配列
+/// @brief Normal case: the bootstrap sample is a non-empty JSON array
 TEST_F(ComplexAggregates, BootstrapSampleNormal) {
     std::string result = query_text(
         db_, "SELECT stat_bootstrap_sample(val) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, BootstrapSampleEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_bootstrap_sample(val) FROM empty_data"));
 }
 
 // =====================================================================
-// 26. stat_permutation_test2 (JSON返却, 非決定的)
+// 26. stat_permutation_test2 (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: 置換検定, 2群は明確に異なるので p_value < 0.1
+/// @brief Normal case: permutation test; the groups differ clearly, so p_value < 0.1
 TEST_F(ComplexAggregates, PermutationTest2Normal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_test2(val, grp) FROM grp_data");
@@ -519,124 +519,124 @@ TEST_F(ComplexAggregates, PermutationTest2Normal) {
     EXPECT_LT(p_value, 0.1);
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, PermutationTest2Empty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_permutation_test2(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 27. stat_permutation_paired (JSON返却, 非決定的)
+// 27. stat_permutation_paired (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: 対応のある置換検定が空でないJSON文字列
+/// @brief Normal case: the paired permutation test is a non-empty JSON string
 TEST_F(ComplexAggregates, PermutationPairedNormal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_paired(x, y) FROM xy_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, PermutationPairedEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_permutation_paired(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 28. stat_permutation_corr (JSON返却, 非決定的)
+// 28. stat_permutation_corr (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: 相関の置換検定が空でないJSON文字列
+/// @brief Normal case: the correlation permutation test is a non-empty JSON string
 TEST_F(ComplexAggregates, PermutationCorrNormal) {
     std::string result = query_text(
         db_, "SELECT stat_permutation_corr(x, y) FROM xy_data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, PermutationCorrEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_permutation_corr(val, val) FROM empty_data"));
 }
 
 // =====================================================================
-// 29. stat_acf (JSON返却)
+// 29. stat_acf (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 自己相関関数が空でないJSON配列
+/// @brief Normal case: the autocorrelation function is a non-empty JSON array
 TEST_F(ComplexAggregates, AcfNormal) {
     std::string result = query_text(
         db_, "SELECT stat_acf(val, 5) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, AcfEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_acf(val, 5) FROM empty_data"));
 }
 
 // =====================================================================
-// 30. stat_pacf (JSON返却)
+// 30. stat_pacf (returns JSON)
 // =====================================================================
 
-/// @brief 正常系: 偏自己相関関数が空でないJSON配列
+/// @brief Normal case: the partial autocorrelation function is a non-empty JSON array
 TEST_F(ComplexAggregates, PacfNormal) {
     std::string result = query_text(
         db_, "SELECT stat_pacf(val, 5) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, PacfEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_pacf(val, 5) FROM empty_data"));
 }
 
 // =====================================================================
-// 31. stat_sample_replace (JSON返却, 非決定的)
+// 31. stat_sample_replace (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: 復元抽出が空でないJSON配列
+/// @brief Normal case: sampling with replacement gives a non-empty JSON array
 TEST_F(ComplexAggregates, SampleReplaceNormal) {
     std::string result = query_text(
         db_, "SELECT stat_sample_replace(val, 3) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, SampleReplaceEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_sample_replace(val, 3) FROM empty_data"));
 }
 
 // =====================================================================
-// 32. stat_sample (JSON返却, 非決定的)
+// 32. stat_sample (returns JSON, non-deterministic)
 // =====================================================================
 
-/// @brief 正常系: 非復元抽出が空でないJSON配列
+/// @brief Normal case: sampling without replacement gives a non-empty JSON array
 TEST_F(ComplexAggregates, SampleNormal) {
     std::string result = query_text(
         db_, "SELECT stat_sample(val, 3) FROM data");
     EXPECT_FALSE(result.empty());
 }
 
-/// @brief 空テーブル → NULL
+/// @brief Empty table -> NULL
 TEST_F(ComplexAggregates, SampleEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_sample(val, 3) FROM empty_data"));
 }
 
 // =====================================================================
-// 33-41. 群列パターン (value, group)
+// 33-41. Group-column form (value, group)
 //
-// stat_anova1 と同じ「値列 + 群列」形式を取る検定・事後検定.
-// 期待値は R 4.4.2 の実測値を使用する.
+// Tests and post-hoc tests taking the same "values + groups" form as stat_anova1.
+// Expected values are measured from R 4.4.2.
 //   v <- c(10,12,14,11,13, 20,30,15,25,40, 15,17,16,18,14)
 //   g <- factor(rep(1:3, each = 5))
 // =====================================================================
 
-/// @brief 群列テスト用のデータを作成する(3群・分散が不均一)
+/// @brief Create the group test data (three groups, unequal variances)
 static void create_group_table(sqlite3* db) {
     exec_sql(db, "CREATE TABLE g3(val REAL, grp INT)");
     exec_sql(db,
@@ -646,7 +646,7 @@ static void create_group_table(sqlite3* db) {
         "(15,3),(17,3),(16,3),(18,3),(14,3)");
 }
 
-/// @brief 群列テスト用のデータを作成する(3群・等分散, 事後検定用)
+/// @brief Create the group test data (three groups, equal variances, for post-hoc tests)
 static void create_balanced_group_table(sqlite3* db) {
     exec_sql(db, "CREATE TABLE gb(val REAL, grp INT)");
     exec_sql(db,
@@ -656,7 +656,7 @@ static void create_balanced_group_table(sqlite3* db) {
         "(15,3),(17,3),(16,3),(18,3),(14,3)");
 }
 
-/// @brief 正常系: Kruskal-Wallis 検定が R の kruskal.test() と一致する
+/// @brief Normal case: Kruskal-Wallis matches R's kruskal.test()
 TEST_F(ComplexAggregates, KruskalWallisMatchesR) {
     create_group_table(db_);
     std::string r = query_text(db_, "SELECT stat_kruskal_wallis(val, grp) FROM g3");
@@ -666,8 +666,8 @@ TEST_F(ComplexAggregates, KruskalWallisMatchesR) {
     EXPECT_NEAR(json_double(db_, r, "$.df"), 2.0, 1e-9);
 }
 
-/// @brief 正常系: Levene 検定が R の car::leveneTest() と一致する
-///        (statcpp は中央値基準の Brown-Forsythe 版. car の既定と同じ)
+/// @brief Normal case: Levene matches R's car::leveneTest()
+///        (statcpp uses the median-based Brown-Forsythe form, as car does by default)
 TEST_F(ComplexAggregates, LeveneMatchesR) {
     create_group_table(db_);
     std::string r = query_text(db_, "SELECT stat_levene(val, grp) FROM g3");
@@ -676,7 +676,7 @@ TEST_F(ComplexAggregates, LeveneMatchesR) {
     EXPECT_NEAR(json_double(db_, r, "$.p_value"), 0.02689376, 1e-7);
 }
 
-/// @brief 正常系: Bartlett 検定が R の bartlett.test() と一致する
+/// @brief Normal case: Bartlett matches R's bartlett.test()
 TEST_F(ComplexAggregates, BartlettMatchesR) {
     create_group_table(db_);
     std::string r = query_text(db_, "SELECT stat_bartlett(val, grp) FROM g3");
@@ -685,7 +685,7 @@ TEST_F(ComplexAggregates, BartlettMatchesR) {
     EXPECT_NEAR(json_double(db_, r, "$.p_value"), 0.0006419024, 1e-9);
 }
 
-/// @brief 境界値: 全群の分散が等しい場合, Levene/Bartlett は F=0, p=1 を返す
+/// @brief Boundary: with equal variances across groups, Levene and Bartlett give F=0, p=1
 TEST_F(ComplexAggregates, EqualVarianceGivesZeroStatistic) {
     create_balanced_group_table(db_);
     for (const char* fn : {"stat_levene", "stat_bartlett"}) {
@@ -699,16 +699,16 @@ TEST_F(ComplexAggregates, EqualVarianceGivesZeroStatistic) {
     }
 }
 
-/// @brief 正常系: Cohen's f が R の sqrt(eta2/(1-eta2)) と一致する
+/// @brief Normal case: Cohen's f matches R's sqrt(eta2/(1-eta2))
 TEST_F(ComplexAggregates, CohensFMatchesR) {
     create_group_table(db_);
     double f = query_double(db_, "SELECT stat_cohens_f(val, grp) FROM g3");
     EXPECT_NEAR(f, 1.154701, 1e-6);
 }
 
-/// @brief 正常系: Tukey HSD が R の TukeyHSD() と一致する
-///        statcpp は group1 - group2 (添字の小さい方が基準), R は逆向きに
-///        報告するため, 平均差と信頼区間の符号が反転する
+/// @brief Normal case: Tukey HSD matches R's TukeyHSD()
+///        statcpp reports group1 - group2 with group1 the lower index, whereas R
+///        reports the opposite direction, so the mean difference and interval are negated
 TEST_F(ComplexAggregates, TukeyHsdMatchesR) {
     create_balanced_group_table(db_);
     std::string r = query_text(db_, "SELECT stat_tukey_hsd(val, grp) FROM gb");
@@ -721,12 +721,12 @@ TEST_F(ComplexAggregates, TukeyHsdMatchesR) {
     EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].lower"), -11.667864, 1e-5);
     EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].upper"), -6.332136, 1e-5);
     EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].p_value"), 3.07581e-06, 1e-10);
-    // R: 3-2 diff=-5, p adj=0.0008342 → 添字では group1=1, group2=2 の +5
+    // R: 3-2 diff=-5, p adj=0.0008342 -> by index this is group1=1, group2=2 with +5
     EXPECT_NEAR(json_double(db_, r, "$.comparisons[2].mean_diff"), 5.0, 1e-9);
     EXPECT_NEAR(json_double(db_, r, "$.comparisons[2].p_value"), 0.00083421, 1e-8);
 }
 
-/// @brief 正常系: 3群の全ペア比較なので comparisons は 3 要素
+/// @brief Normal case: three groups means all pairs, so comparisons has 3 entries
 TEST_F(ComplexAggregates, PosthocComparisonCount) {
     create_balanced_group_table(db_);
     for (const char* fn : {"stat_tukey_hsd", "stat_bonferroni_posthoc",
@@ -736,13 +736,13 @@ TEST_F(ComplexAggregates, PosthocComparisonCount) {
         sql += "(val, grp), '$.comparisons') FROM gb";
         EXPECT_NEAR(query_double(db_, sql.c_str()), 3.0, 1e-9) << fn;
     }
-    // Dunnett は対照群との比較のみなので k-1 = 2 要素
+    // Dunnett compares against the control only, so k-1 = 2 entries
     EXPECT_NEAR(query_double(db_,
         "SELECT json_array_length(stat_dunnett_posthoc(val, grp), "
         "'$.comparisons') FROM gb"), 2.0, 1e-9);
 }
 
-/// @brief 正常系: alpha を省略すると 0.05, 指定するとその値が使われる
+/// @brief Normal case: alpha defaults to 0.05, or takes the value given
 TEST_F(ComplexAggregates, PosthocAlphaIsConfigurable) {
     create_balanced_group_table(db_);
     EXPECT_NEAR(query_double(db_,
@@ -753,7 +753,7 @@ TEST_F(ComplexAggregates, PosthocAlphaIsConfigurable) {
         0.01, 1e-9);
 }
 
-/// @brief 正常系: Scheffe は Tukey より保守的なので p 値が大きくなる
+/// @brief Normal case: Scheffe is more conservative than Tukey, so its p-value is larger
 TEST_F(ComplexAggregates, ScheffeIsMoreConservativeThanTukey) {
     create_balanced_group_table(db_);
     double tukey = query_double(db_,
@@ -765,7 +765,7 @@ TEST_F(ComplexAggregates, ScheffeIsMoreConservativeThanTukey) {
     EXPECT_GT(scheffe, tukey);
 }
 
-/// @brief 異常系: 群が 1 つしかない場合は NULL を返す
+/// @brief Error case: returns NULL when there is only one group
 TEST_F(ComplexAggregates, GroupFunctionsRequireTwoGroups) {
     exec_sql(db_, "CREATE TABLE g1(val REAL, grp INT)");
     exec_sql(db_, "INSERT INTO g1 VALUES (1,1),(2,1),(3,1)");
@@ -780,7 +780,7 @@ TEST_F(ComplexAggregates, GroupFunctionsRequireTwoGroups) {
     }
 }
 
-/// @brief 異常系: 空テーブル → NULL
+/// @brief Error case: empty table -> NULL
 TEST_F(ComplexAggregates, GroupFunctionsEmpty) {
     for (const char* fn : {"stat_kruskal_wallis", "stat_levene", "stat_bartlett",
                            "stat_cohens_f", "stat_tukey_hsd",
@@ -792,34 +792,34 @@ TEST_F(ComplexAggregates, GroupFunctionsEmpty) {
     }
 }
 
-/// @brief 異常系: 対照群の添字が群数を超える場合は NULL
+/// @brief Error case: returns NULL when the control index exceeds the group count
 TEST_F(ComplexAggregates, DunnettRejectsOutOfRangeControl) {
     create_balanced_group_table(db_);
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_dunnett_posthoc(val, grp, 9, 0.05) FROM gb"));
 }
 
-/// @brief 異常系: NULL 行は群分割から除外される
+/// @brief Error case: NULL rows are excluded when splitting into groups
 TEST_F(ComplexAggregates, GroupFunctionsSkipNulls) {
     exec_sql(db_, "CREATE TABLE gn(val REAL, grp INT)");
     exec_sql(db_, "INSERT INTO gn VALUES "
                   "(10,1),(NULL,1),(12,1),(14,1),(20,2),(22,2),(NULL,2),(19,2)");
     std::string r = query_text(db_, "SELECT stat_bartlett(val, grp) FROM gn");
     ASSERT_FALSE(r.empty());
-    // NULL を除いた 3 件ずつで検定されるため df = k - 1 = 1
+    // Only the 3 non-NULL values per group are tested, so df = k - 1 = 1
     EXPECT_NEAR(json_double(db_, r, "$.df"), 1.0, 1e-9);
 }
 
-/// @brief 正常系: 層化抽出は各層から抽出率に応じた件数を取る
+/// @brief Normal case: stratified sampling draws from each stratum in proportion to the ratio
 TEST_F(ComplexAggregates, StratifiedSampleRespectsRatio) {
     create_balanced_group_table(db_);
-    // 各群 5 件 × 3 群. 抽出率 0.4 → 各群 2 件 = 計 6 件
+    // 5 rows per group across 3 groups; a ratio of 0.4 gives 2 per group = 6 in total
     double n = query_double(db_,
         "SELECT json_array_length(stat_stratified_sample(val, grp, 0.4)) FROM gb");
     EXPECT_NEAR(n, 6.0, 1e-9);
 }
 
-/// @brief 境界値: 抽出率 1.0 では全件が返る
+/// @brief Boundary: a ratio of 1.0 returns every row
 TEST_F(ComplexAggregates, StratifiedSampleFullRatio) {
     create_balanced_group_table(db_);
     double n = query_double(db_,
@@ -827,8 +827,8 @@ TEST_F(ComplexAggregates, StratifiedSampleFullRatio) {
     EXPECT_NEAR(n, 15.0, 1e-9);
 }
 
-/// @brief 正常系: Dunnett は 2/3/4 引数のいずれの形式でも呼べる
-///        (末尾のパラメータから順に省略できる)
+/// @brief Normal case: Dunnett accepts the 2, 3 and 4 argument forms
+///        (trailing parameters can be dropped from the right)
 TEST_F(ComplexAggregates, DunnettAcceptsAllArities) {
     create_balanced_group_table(db_);
     const char* sqls[] = {

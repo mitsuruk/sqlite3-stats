@@ -1,9 +1,9 @@
 /**
  * @file test_helpers.hpp
- * @brief 統計関数テスト用の共通ヘルパーとフィクスチャ
+ * @brief Shared helpers and fixture for the statistical function tests
  *
- * Google Test フィクスチャとして,インメモリDB作成・拡張ロード・
- * テストデータ投入を共通化し,各テストファイルから利用する.
+ * Provides a Google Test fixture that centralises creating the in-memory database,
+ * loading the extension and inserting the test data, for use by every test file.
  */
 #pragma once
 
@@ -16,7 +16,7 @@
 #include <vector>
 
 // =====================================================================
-// 拡張ライブラリのパス(CMakeから注入)
+// Path to the extension library (injected by CMake)
 // =====================================================================
 #ifndef EXT_FUNCS_PATH
 #if defined(__APPLE__)
@@ -29,11 +29,11 @@
 #endif
 
 // =====================================================================
-// ヘルパー関数(フリー関数)
+// Helper functions (free functions)
 // =====================================================================
 
 /**
- * @brief DDL/DML を実行する. エラー時は FAIL() で即座にテスト失敗
+ * @brief Run DDL/DML. Fails the test immediately via FAIL() on error
  */
 inline void exec_sql(sqlite3* db, const char* sql) {
     char* errmsg = nullptr;
@@ -46,8 +46,8 @@ inline void exec_sql(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT の結果を double で取得する
- * @return 結果値. NULL の場合は NaN を返す
+ * @brief Fetch a SELECT result as a double
+ * @return The value, or NaN if it is NULL
  */
 inline double query_double(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -64,8 +64,8 @@ inline double query_double(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT の結果をテキスト(JSON等)で取得する
- * @return 結果文字列. NULL の場合は空文字列
+ * @brief Fetch a SELECT result as text (JSON and the like)
+ * @return The string, or empty if it is NULL
  */
 inline std::string query_text(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -84,8 +84,8 @@ inline std::string query_text(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT の結果を int64_t で取得する
- * @return 結果値. NULL の場合は 0 を返す
+ * @brief Fetch a SELECT result as an int64_t
+ * @return The value, or 0 if it is NULL
  */
 inline int64_t query_int(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -102,7 +102,7 @@ inline int64_t query_int(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT の結果が NULL かどうかを判定する
+ * @brief Determine whether a SELECT result is NULL
  */
 inline bool query_is_null(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -119,16 +119,16 @@ inline bool query_is_null(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT がエラーになることを確認し,エラーメッセージを返す
+ * @brief Assert that a SELECT fails and return the error message
  *
- * statcpp は引数が不正な場合に std::invalid_argument を送出する.
- * 拡張機能側でこれを捕捉できていないと,例外が SQLite の C ABI 境界を越えて
- * std::terminate に至り,テストプロセスごと停止する.
- * 本ヘルパが値を返せること自体が,ガードが機能している証拠になる.
+ * statcpp throws std::invalid_argument when an argument is out of range. If the
+ * extension fails to catch it, the exception crosses SQLite's C ABI boundary and
+ * reaches std::terminate, taking the test process down with it. That this helper
+ * can return a value at all is itself evidence the guard is working.
  *
- * @param db 対象のデータベース接続
- * @param sql 実行する SQL
- * @return エラーになった場合はそのメッセージ,成功した場合は空文字列
+ * @param db Target database connection
+ * @param sql SQL to execute
+ * @return The error message if it failed, or an empty string on success
  */
 inline std::string query_error(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -148,8 +148,8 @@ inline std::string query_error(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief SELECT の複数行結果を vector<double> で取得する(ウィンドウ関数用)
- *        NULL 行は NaN として格納
+ * @brief Fetch a multi-row SELECT result as a vector<double> (for window functions)
+ *        NULL rows are stored as NaN
  */
 inline std::vector<double> query_doubles(sqlite3* db, const char* sql) {
     sqlite3_stmt* stmt = nullptr;
@@ -169,7 +169,7 @@ inline std::vector<double> query_doubles(sqlite3* db, const char* sql) {
 }
 
 /**
- * @brief JSON文字列から json_extract() で double 値を取得する
+ * @brief Extract a double from a JSON string via json_extract()
  */
 inline double json_double(sqlite3* db, const std::string& json,
                           const char* path) {
@@ -179,7 +179,7 @@ inline double json_double(sqlite3* db, const std::string& json,
 }
 
 /**
- * @brief JSON文字列から json_extract() でテキスト値を取得する
+ * @brief Extract text from a JSON string via json_extract()
  */
 inline std::string json_text(sqlite3* db, const std::string& json,
                              const char* path) {
@@ -189,31 +189,31 @@ inline std::string json_text(sqlite3* db, const std::string& json,
 }
 
 // =====================================================================
-// テストフィクスチャ
+// Test fixtures
 // =====================================================================
 
 /**
- * @brief 統計関数テスト用の基本フィクスチャ
+ * @brief Base fixture for the statistical function tests
  *
- * SetUp() でインメモリDB作成,ext_funcs拡張ロード,テストデータ投入を行い,
- * TearDown() でDB close する.
+ * SetUp() creates the in-memory database, loads the ext_funcs extension and inserts
+ * the test data; TearDown() closes the database.
  */
 class StatFuncTest : public ::testing::Test {
 protected:
     sqlite3* db_ = nullptr;
 
     void SetUp() override {
-        // インメモリDB作成
+        // Create the in-memory database
         int rc = sqlite3_open(":memory:", &db_);
         ASSERT_EQ(rc, SQLITE_OK) << "Cannot open database: "
                                  << sqlite3_errmsg(db_);
 
-        // 拡張ロード有効化
+        // Enable extension loading
         rc = sqlite3_enable_load_extension(db_, 1);
         ASSERT_EQ(rc, SQLITE_OK) << "enable_load_extension failed: "
                                  << sqlite3_errmsg(db_);
 
-        // ext_funcs 拡張ロード
+        // Load the ext_funcs extension
         char* load_errmsg = nullptr;
         rc = sqlite3_load_extension(db_, EXT_FUNCS_PATH,
                                     "sqlite3_ext_funcs_init", &load_errmsg);
@@ -224,7 +224,7 @@ protected:
                    << "\n  Path: " << EXT_FUNCS_PATH;
         }
 
-        // テストデータ投入
+        // Insert the test data
         CreateTestData();
     }
 
@@ -236,9 +236,9 @@ protected:
     }
 
 private:
-    /// @brief 全テストデータテーブルを作成する
+    /// @brief Create every test data table
     void CreateTestData() {
-        // data: 基本統計用 (val: 1-10, mean=5.5, median=5.5)
+        // data: basic statistics (val: 1-10, mean=5.5, median=5.5)
         exec_sql(db_, "CREATE TABLE data (id INTEGER PRIMARY KEY, val REAL)");
         for (int i = 1; i <= 10; ++i) {
             std::string sql = "INSERT INTO data (val) VALUES (" +
@@ -246,75 +246,75 @@ private:
             exec_sql(db_, sql.c_str());
         }
 
-        // data2: 最頻値用 (mode=3)
+        // data2: mode (mode=3)
         exec_sql(db_, "CREATE TABLE data2 (val REAL)");
         exec_sql(db_,
             "INSERT INTO data2 VALUES (1),(2),(2),(3),(3),(3),(4),(4),(5)");
 
-        // pos_data: 幾何平均用 (2,4,8 → geometric_mean=4.0)
+        // pos_data: geometric mean (2,4,8 -> geometric_mean=4.0)
         exec_sql(db_, "CREATE TABLE pos_data (val REAL)");
         exec_sql(db_, "INSERT INTO pos_data VALUES (2),(4),(8)");
 
-        // nulldata: NULL処理用 (1,NULL,3,NULL,5)
+        // nulldata: NULL handling (1,NULL,3,NULL,5)
         exec_sql(db_, "CREATE TABLE nulldata (val REAL)");
         exec_sql(db_,
             "INSERT INTO nulldata VALUES (1),(NULL),(3),(NULL),(5)");
 
-        // empty_data: 空テーブル(エッジケース用)
+        // empty_data: empty table (edge cases)
         exec_sql(db_, "CREATE TABLE empty_data (val REAL)");
 
-        // grouped: GROUP BY テスト用
+        // grouped: GROUP BY tests
         exec_sql(db_, "CREATE TABLE grouped (grp TEXT, val REAL)");
         exec_sql(db_,
             "INSERT INTO grouped VALUES "
             "('A',1),('A',2),('A',3),('B',10),('B',20),('B',30)");
 
-        // xy_data: 相関・回帰用 (10行)
+        // xy_data: correlation and regression (10 rows)
         exec_sql(db_, "CREATE TABLE xy_data (x REAL, y REAL)");
         exec_sql(db_,
             "INSERT INTO xy_data VALUES "
             "(1,2),(2,4),(3,5),(4,4),(5,5),(6,7),(7,8),(8,6),(9,11),(10,8)");
 
-        // wt_data: 加重統計用 (5行)
+        // wt_data: weighted statistics (5 rows)
         exec_sql(db_, "CREATE TABLE wt_data (val REAL, wt REAL)");
         exec_sql(db_,
             "INSERT INTO wt_data VALUES "
             "(10,1),(20,2),(30,3),(40,2),(50,1)");
 
-        // pred_data: 予測精度指標用
+        // pred_data: prediction accuracy metrics
         exec_sql(db_, "CREATE TABLE pred_data (actual REAL, predicted REAL)");
         exec_sql(db_,
             "INSERT INTO pred_data VALUES "
             "(3,2.5),(5,5.2),(7,6.8),(9,9.1),(11,10.5)");
 
-        // ts_data: ウィンドウ関数用 (10行, NULL at id=3,8)
+        // ts_data: window functions (10 rows, NULL at id=3,8)
         exec_sql(db_, "CREATE TABLE ts_data (id INTEGER PRIMARY KEY, val REAL)");
         exec_sql(db_,
             "INSERT INTO ts_data VALUES "
             "(1,10),(2,20),(3,NULL),(4,40),(5,50),"
             "(6,30),(7,70),(8,NULL),(9,90),(10,100)");
 
-        // cat_data: カテゴリカルエンコーディング用
+        // cat_data: categorical encoding
         exec_sql(db_,
             "CREATE TABLE cat_data (id INTEGER PRIMARY KEY, val REAL)");
         exec_sql(db_,
             "INSERT INTO cat_data VALUES "
             "(1,100),(2,200),(3,100),(4,300),(5,200),(6,100)");
 
-        // surv_data: 生存分析用
+        // surv_data: survival analysis
         exec_sql(db_, "CREATE TABLE surv_data(time REAL, event INT)");
         exec_sql(db_,
             "INSERT INTO surv_data VALUES "
             "(1,1),(2,0),(3,1),(4,1),(5,0),(6,1),(7,1),(8,0),(9,1),(10,1)");
 
-        // grp_data: 2標本検定用
+        // grp_data: two-sample tests
         exec_sql(db_, "CREATE TABLE grp_data(val REAL, grp INT)");
         exec_sql(db_,
             "INSERT INTO grp_data VALUES "
             "(10,0),(12,0),(14,0),(16,0),(18,0),"
             "(20,1),(22,1),(24,1),(26,1),(28,1)");
 
-        // surv2: ログランク検定用 (2群)
+        // surv2: log-rank test (two groups)
         exec_sql(db_, "CREATE TABLE surv2(time REAL, event INT, grp INT)");
         exec_sql(db_,
             "INSERT INTO surv2 VALUES "

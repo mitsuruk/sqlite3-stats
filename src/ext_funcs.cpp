@@ -42,14 +42,15 @@ SQLITE_EXTENSION_INIT1
 // ===========================================================================
 
 /**
- * @brief SQLite のコールバック本体を実行し, 送出された例外を SQL エラーに変換する
+ * @brief Run a SQLite callback body, converting any thrown exception into a SQL error
  *
- * SQLite は C の ABI でコールバックを呼び出すため, 例外が境界を越えると
- * std::terminate に至りホストプロセスごと停止する. 本ヘルパを通すことで,
- * 例外は sqlite3_result_error() 経由の通常の SQL エラーとして報告される.
+ * SQLite invokes its callbacks across the C ABI, so an exception crossing that
+ * boundary reaches std::terminate and takes the host process down with it. Routing
+ * a body through this helper reports it as an ordinary SQL error through
+ * sqlite3_result_error() instead.
  *
- * @param ctx SQLite の関数コンテキスト
- * @param body 実行する処理(引数なしの呼び出し可能オブジェクト)
+ * @param ctx SQLite function context
+ * @param body Work to run (a callable taking no arguments)
  */
 template <typename Body>
 static void invoke_guarded(sqlite3_context* ctx, Body&& body) {
@@ -63,11 +64,11 @@ static void invoke_guarded(sqlite3_context* ctx, Body&& body) {
 }
 
 /**
- * @brief 集約ステートをスコープ終了時に確実に破棄する RAII ガード
+ * @brief RAII guard that destroys an aggregate state on scope exit
  *
- * xFinal の途中で例外が送出されても解放漏れが起きないようにする.
- * sqlite3_aggregate_context() が返すバッファにはヒープ上のステートへの
- * ポインタが格納されているため, 破棄後にヌルを書き戻す.
+ * Ensures nothing leaks when xFinal throws part way through. The buffer returned
+ * by sqlite3_aggregate_context() holds a pointer to a heap-allocated state, so the
+ * pointer is written back as null once the state is destroyed.
  */
 template <typename State>
 class AggregateStateGuard {
@@ -85,7 +86,7 @@ public:
     AggregateStateGuard& operator=(const AggregateStateGuard&) = delete;
 
 private:
-    State** pp_;  ///< 集約コンテキスト内のステートポインタへのポインタ
+    State** pp_;  ///< Pointer to the state pointer held in the aggregate context
 };
 
 // ===========================================================================
@@ -117,7 +118,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<SingleColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<SingleColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
@@ -336,7 +337,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
@@ -406,7 +407,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
@@ -674,7 +675,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<TwoColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<TwoColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
@@ -733,7 +734,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<TwoColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<TwoColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
@@ -816,7 +817,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
@@ -858,9 +859,9 @@ private:
 
 // --- C variant: with extra parameter(s), returns JSON text ---
 //
-// TwoColumnAggregateText にパラメータを加えたもの. 群列を伴う事後検定
-// (alpha を取る) や層化抽出 (抽出率を取る) など, 2 列 + パラメータで
-// 構造化結果を返す関数に用いる.
+// TwoColumnAggregateText with parameters added. Used where two columns plus a
+// parameter produce a structured result: post-hoc tests over a group column
+// (which take alpha), stratified sampling (which takes a ratio), and the like.
 
 template <std::size_t NParams,
           std::string (*Func)(const std::vector<double>&,
@@ -893,7 +894,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<State**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
             sqlite3_result_null(ctx);
@@ -911,9 +912,9 @@ public:
         });
     }
 
-    // 2 引数から 2+NParams 引数までのすべての形式を登録する.
-    // 省略されたパラメータは xStep が既定値のまま残すため, 末尾から順に
-    // 省略できる (例: NParams=2 なら 2, 3, 4 引数のいずれでも呼べる).
+    // Register every form from two arguments up to 2 + NParams.
+    // xStep leaves an omitted parameter at its default, so parameters can be
+    // dropped from the right (with NParams = 2, arities 2, 3 and 4 all work).
     static int register_func(sqlite3* db, const char* name) {
         int rc = SQLITE_OK;
         for (std::size_t n = 0; n <= NParams; ++n) {
@@ -1023,7 +1024,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<WindowState**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<WindowState> state_guard(pp);
         if (!pp || !*pp) {
             sqlite3_result_null(ctx);
@@ -1402,17 +1403,17 @@ static std::vector<double> wf_rank(const std::vector<double>& values,
 
 // --- Multiple testing corrections ---
 //
-// 多重比較補正は p 値集合全体を見ないと補正値が決まらない(単調性の強制が必要).
-// そのため 1 行ずつ独立に評価されるスカラー関数では原理的に表現できず,
-// 全行を収集するウィンドウ関数として実装し statcpp に委譲する.
-// NULL 行は補正の対象から除外し, 出力でも NULL を維持する.
+// A correction value cannot be determined without seeing the whole set of p-values,
+// because monotonicity has to be enforced. A scalar function evaluating one row at a
+// time therefore cannot express it; these collect every row and delegate to statcpp.
+// NULL rows are excluded from the correction and stay NULL in the output.
 
 /**
- * @brief 補正済み p 値を元の行位置へ写像する共通処理
- * @param values 収集した値(NULL 位置は NaN)
- * @param nulls 各行が NULL かどうか
- * @param correction statcpp の補正関数
- * @return 行順に並んだ補正済み p 値(NULL 位置は NaN)
+ * @brief Map corrected p-values back onto their original row positions
+ * @param values Collected values (NaN where the row was NULL)
+ * @param nulls Whether each row was NULL
+ * @param correction The statcpp correction function to apply
+ * @return Corrected p-values in row order (NaN where the row was NULL)
  */
 static std::vector<double> apply_pvalue_correction(
     const std::vector<double>& values,
@@ -1422,7 +1423,7 @@ static std::vector<double> apply_pvalue_correction(
     std::vector<double> result(values.size(), std::numeric_limits<double>::quiet_NaN());
     if (valid.empty()) return result;
     auto adjusted = correction(valid);
-    // Map back to original positions (wf_rank と同一パターン)
+    // Map back to original positions (same pattern as wf_rank)
     std::size_t vi = 0;
     for (std::size_t i = 0; i < values.size(); ++i) {
         if (!nulls[i]) {
@@ -1704,7 +1705,7 @@ public:
     static void xFinal(sqlite3_context* ctx) {
         auto** pp = static_cast<SingleColumnState**>(
             sqlite3_aggregate_context(ctx, 0));
-        // xFinal の途中で例外が送出されてもステートを解放する
+        // Release the state even if xFinal throws part way through
         AggregateStateGuard<SingleColumnState> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
             sqlite3_result_null(ctx);
@@ -1755,12 +1756,12 @@ private:
 
 // Generic scalar registration helper (implemented per-function via lambdas)
 /**
- * @brief スカラー関数の実装を invoke_guarded 経由で呼び出すスタブ
+ * @brief Stub that invokes a scalar implementation through invoke_guarded
  *
- * 実装を非型テンプレート引数として受け取るため, ガードを外した状態で
- * 登録することが構造的にできない.
+ * The implementation is taken as a non-type template parameter, which makes it
+ * structurally impossible to register one without the guard.
  *
- * @tparam Fn 実際のスカラー関数の実装
+ * @tparam Fn The actual scalar function implementation
  */
 template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
 static void guarded_scalar(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
@@ -1768,13 +1769,13 @@ static void guarded_scalar(sqlite3_context* ctx, int argc, sqlite3_value** argv)
 }
 
 /**
- * @brief スカラー関数を登録する(結果が引数のみで決まる関数用)
+ * @brief Register a scalar function (one whose result depends only on its arguments)
  *
- * @tparam Fn 実装. 常に例外ガードで包まれる
- * @param db 対象のデータベース接続
- * @param name SQL 上の関数名
- * @param nArgs 引数の個数(可変長は -1)
- * @return SQLite の結果コード
+ * @tparam Fn The implementation; always wrapped in the exception guard
+ * @param db Target database connection
+ * @param name Function name as seen from SQL
+ * @param nArgs Argument count (-1 for variadic)
+ * @return SQLite result code
  */
 template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
 static int register_scalar(sqlite3* db, const char* name, int nArgs) {
@@ -1785,13 +1786,13 @@ static int register_scalar(sqlite3* db, const char* name, int nArgs) {
 }
 
 /**
- * @brief 非決定的なスカラー関数を登録する(乱数を使う関数用)
+ * @brief Register a non-deterministic scalar function (one that draws random numbers)
  *
- * @tparam Fn 実装. 常に例外ガードで包まれる
- * @param db 対象のデータベース接続
- * @param name SQL 上の関数名
- * @param nArgs 引数の個数(可変長は -1)
- * @return SQLite の結果コード
+ * @tparam Fn The implementation; always wrapped in the exception guard
+ * @param db Target database connection
+ * @param name Function name as seen from SQL
+ * @param nArgs Argument count (-1 for variadic)
+ * @return SQLite result code
  */
 template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
 static int register_scalar_nd(sqlite3* db, const char* name, int nArgs) {
@@ -1816,15 +1817,15 @@ static void result_int64(sqlite3_context* ctx, std::int64_t v) {
 }
 
 /**
- * @brief 台が非有界な分布の分位点を返す. 有限の分位点が無い場合は NULL
+ * @brief Return a quantile for a distribution with unbounded support, or NULL
  *
- * ポアソン・幾何・負の二項分布は台が上に有界でないため, p = 1 に対応する
- * 分位点が存在しない. statcpp はこの場合に uint64 の最大値を番兵として
- * 返すので, SQL 上は NULL に対応付ける(そのまま int64 にキャストすると
- * 分位点として無意味な -1 になる).
+ * The Poisson, geometric and negative binomial distributions are unbounded above,
+ * so no finite quantile corresponds to p = 1. statcpp returns the maximum uint64
+ * value as a sentinel in that case, which maps to NULL in SQL (casting it straight
+ * to int64 would yield -1, meaningless as a quantile).
  *
- * @param ctx SQLite の関数コンテキスト
- * @param v statcpp の分位点関数の戻り値
+ * @param ctx SQLite function context
+ * @param v Return value of the statcpp quantile function
  */
 static void result_unbounded_quantile(sqlite3_context* ctx, std::uint64_t v) {
     if (v == std::numeric_limits<std::uint64_t>::max()) {
@@ -1995,18 +1996,19 @@ static std::string calc_mann_whitney(const std::vector<double>& x,
 }
 
 // ===========================================================================
-// 群列パターン共通処理
+// Shared handling for the group-column form
 //
-// 「値列 + 群列」の 2 列を受け取り, statcpp が要求する
-// std::vector<std::vector<double>> へ変換する. 群は群列の値で昇順に並ぶ
-// (std::map の順序) ため, 群番号は SQL 側の値の昇順と一致する.
+// Takes the two columns "values + groups" and converts them into the
+// std::vector<std::vector<double>> statcpp expects. Groups come out in ascending
+// order of the group column (std::map ordering), so a group's index matches the
+// ascending order of its value on the SQL side.
 // ===========================================================================
 
 /**
- * @brief 値列を群列で分割する
- * @param values 値の列
- * @param groups 群を識別する列(値は任意, 昇順に群番号が振られる)
- * @return 群ごとの値の配列. 群が 2 つ未満の場合は空を返す
+ * @brief Split a value column by a group column
+ * @param values The values
+ * @param groups Column identifying the group (any values; indices are assigned in ascending order)
+ * @return Values per group, or empty if there are fewer than two groups
  */
 static std::vector<std::vector<double>> split_by_group(
     const std::vector<double>& values,
@@ -2018,15 +2020,15 @@ static std::vector<std::vector<double>> split_by_group(
     std::vector<std::vector<double>> group_vecs;
     group_vecs.reserve(grouped.size());
     for (auto& g : grouped) group_vecs.push_back(std::move(g.second));
-    // 検定・分散分析はいずれも 2 群以上を必要とする
+    // Every test and analysis of variance here needs at least two groups
     if (group_vecs.size() < 2) return {};
     return group_vecs;
 }
 
 /**
- * @brief オプションの alpha を検証し, 未指定なら既定値 0.05 を返す
- * @param raw SQL から渡された値(2 引数形式で呼ばれた場合は 0.0)
- * @return (0, 1) の範囲にあればその値, さもなくば 0.05
+ * @brief Validate an optional alpha, falling back to the default of 0.05
+ * @param raw Value passed from SQL (0.0 when called in the two-argument form)
+ * @return raw if it lies in (0, 1), otherwise 0.05
  */
 static double resolve_alpha(double raw) {
     return (raw > 0.0 && raw < 1.0) ? raw : 0.05;
@@ -2048,15 +2050,15 @@ static std::string calc_anova1(const std::vector<double>& values,
 }
 
 // ===========================================================================
-// 群列パターンの検定・事後検定
+// Tests and post-hoc tests over a group column
 //
-// いずれも「値列 + 群列」を取り, split_by_group() で群に分割してから
-// statcpp に委譲する. stat_anova1 と同じ呼び出し形式である.
+// All take "values + groups", split them with split_by_group() and delegate to
+// statcpp. The call form is the same as stat_anova1.
 // ===========================================================================
 
-// --- 群間比較の検定 (value, group → JSON) ---
+// --- Tests comparing groups (value, group -> JSON) ---
 
-/// @brief Kruskal-Wallis 検定 (一元配置分散分析のノンパラメトリック版)
+/// @brief Kruskal-Wallis test (the nonparametric counterpart of one-way ANOVA)
 static std::string calc_kruskal_wallis(const std::vector<double>& values,
                                         const std::vector<double>& groups) {
     auto group_vecs = split_by_group(values, groups);
@@ -2064,7 +2066,7 @@ static std::string calc_kruskal_wallis(const std::vector<double>& values,
     return json_test_result(statcpp::kruskal_wallis_test(group_vecs));
 }
 
-/// @brief Levene 検定 (等分散性. 正規性が疑わしい場合はこちらを使う)
+/// @brief Levene test (equal variance; preferred when normality is doubtful)
 static std::string calc_levene(const std::vector<double>& values,
                                 const std::vector<double>& groups) {
     auto group_vecs = split_by_group(values, groups);
@@ -2072,7 +2074,7 @@ static std::string calc_levene(const std::vector<double>& values,
     return json_test_result(statcpp::levene_test(group_vecs));
 }
 
-/// @brief Bartlett 検定 (等分散性. 正規分布を前提とする)
+/// @brief Bartlett test (equal variance; assumes normality)
 static std::string calc_bartlett(const std::vector<double>& values,
                                   const std::vector<double>& groups) {
     auto group_vecs = split_by_group(values, groups);
@@ -2080,7 +2082,7 @@ static std::string calc_bartlett(const std::vector<double>& values,
     return json_test_result(statcpp::bartlett_test(group_vecs));
 }
 
-/// @brief Cohen's f (一元配置分散分析の効果量)
+/// @brief Cohen's f (the one-way ANOVA effect size)
 static double calc_cohens_f(const std::vector<double>& values,
                              const std::vector<double>& groups) {
     auto group_vecs = split_by_group(values, groups);
@@ -2088,12 +2090,13 @@ static double calc_cohens_f(const std::vector<double>& values,
     return statcpp::cohens_f(statcpp::one_way_anova(group_vecs));
 }
 
-// --- 事後検定 (value, group [,alpha] → JSON) ---
+// --- Post-hoc tests (value, group [,alpha] -> JSON) ---
 
 /**
- * @brief posthoc_result を JSON へ変換する
+ * @brief Convert a posthoc_result to JSON
  *
- * group1 / group2 は群列の値を昇順に並べたときの 0 始まりの添字である.
+ * group1 and group2 are zero-based indices into the group column's values taken
+ * in ascending order.
  */
 static std::string json_posthoc_result(const statcpp::posthoc_result& r) {
     std::string out = "{\"method\":\"" + r.method + "\"";
@@ -2118,7 +2121,7 @@ static std::string json_posthoc_result(const statcpp::posthoc_result& r) {
     return out;
 }
 
-/// @brief Tukey HSD (全ペア比較. 分散分析の標準的な事後検定)
+/// @brief Tukey HSD (all pairs; the standard post-hoc test after ANOVA)
 static std::string calc_tukey_hsd(const std::vector<double>& values,
                                    const std::vector<double>& groups,
                                    const std::array<double, 1>& p) {
@@ -2129,7 +2132,7 @@ static std::string calc_tukey_hsd(const std::vector<double>& values,
         statcpp::tukey_hsd(anova, group_vecs, resolve_alpha(p[0])));
 }
 
-/// @brief Bonferroni 事後検定 (全ペア比較. 保守的)
+/// @brief Bonferroni post-hoc test (all pairs; conservative)
 static std::string calc_bonferroni_posthoc(const std::vector<double>& values,
                                             const std::vector<double>& groups,
                                             const std::array<double, 1>& p) {
@@ -2140,7 +2143,7 @@ static std::string calc_bonferroni_posthoc(const std::vector<double>& values,
         statcpp::bonferroni_posthoc(anova, resolve_alpha(p[0])));
 }
 
-/// @brief Scheffe 事後検定 (全ペア比較. 最も保守的)
+/// @brief Scheffe post-hoc test (all pairs; the most conservative)
 static std::string calc_scheffe_posthoc(const std::vector<double>& values,
                                          const std::vector<double>& groups,
                                          const std::array<double, 1>& p) {
@@ -2151,8 +2154,8 @@ static std::string calc_scheffe_posthoc(const std::vector<double>& values,
         statcpp::scheffe_posthoc(anova, resolve_alpha(p[0])));
 }
 
-/// @brief Dunnett 事後検定 (対照群との比較のみ)
-/// @param p [0]=対照群の添字(既定 0), [1]=alpha(既定 0.05)
+/// @brief Dunnett post-hoc test (against a control group only)
+/// @param p [0] = control group index (default 0), [1] = alpha (default 0.05)
 static std::string calc_dunnett_posthoc(const std::vector<double>& values,
                                          const std::vector<double>& groups,
                                          const std::array<double, 2>& p) {
@@ -2165,15 +2168,15 @@ static std::string calc_dunnett_posthoc(const std::vector<double>& values,
         statcpp::dunnett_posthoc(anova, control, resolve_alpha(p[1])));
 }
 
-// --- 層化抽出 (value, group [,ratio] → JSON 配列) ---
+// --- Stratified sampling (value, group [,ratio] -> JSON array) ---
 
-/// @brief 層化無作為抽出. 各層から同じ割合で標本を取る
-/// @param p [0]=抽出率 (0,1]. 未指定または範囲外なら 0.5
+/// @brief Stratified random sample, drawing the same proportion from each stratum
+/// @param p [0] = sampling ratio in (0,1]; 0.5 when omitted or out of range
 static std::string calc_stratified_sample(const std::vector<double>& values,
                                            const std::vector<double>& groups,
                                            const std::array<double, 1>& p) {
     double ratio = (p[0] > 0.0 && p[0] <= 1.0) ? p[0] : 0.5;
-    // statcpp::stratified_sample は (層, データ, 抽出率) を並行配列で受け取る
+    // statcpp::stratified_sample takes (strata, data, ratio) as parallel arrays
     auto sampled = statcpp::stratified_sample(groups, values, ratio);
     std::string out = "[";
     for (std::size_t i = 0; i < sampled.size(); ++i) {
@@ -2451,7 +2454,7 @@ static void logrank_step(sqlite3_context* ctx, int /*argc*/, sqlite3_value** arg
 static void logrank_final(sqlite3_context* ctx) {
     auto** pp = static_cast<ThreeColumnState**>(
         sqlite3_aggregate_context(ctx, 0));
-    // logrank_final の途中で例外が送出されてもステートを解放する
+    // Release the state even if logrank_final throws part way through
     AggregateStateGuard<ThreeColumnState> state_guard(pp);
     if (!pp || !*pp || (*pp)->c1.empty()) {
         sqlite3_result_null(ctx);
@@ -2612,12 +2615,14 @@ static void sf_z_test_prop2(sqlite3_context* ctx, int /*argc*/, sqlite3_value** 
 }
 
 // --- P6-26: Bonferroni correction (scalar form) ---
-// 検定数 m が既知の場合に単一の p 値を補正する. min(p*m, 1) は statcpp の
-// bonferroni_correction と同一の式であり, 単調性補正を要しないためスカラーで表現できる.
-// p 値集合全体を渡す場合は, ウィンドウ関数版 stat_bonferroni(p) OVER () を使う.
+// Adjusts a single p-value when the number of tests m is known. min(p*m, 1) is the
+// same expression statcpp's bonferroni_correction uses, and needs no monotonicity
+// step, so it can be expressed as a scalar. To correct a whole set of p-values, use
+// the window form stat_bonferroni(p) OVER () instead.
 //
-// BH / Holm 補正は単調性の強制に p 値集合全体を必要とするため, スカラー形式では
-// 提供せず, ウィンドウ関数 stat_bh_correction / stat_holm_correction のみを提供する.
+// BH and Holm corrections need the entire set of p-values to enforce monotonicity, so
+// no scalar form is offered for them; only the window functions stat_bh_correction
+// and stat_holm_correction.
 static void sf_bonferroni(sqlite3_context* ctx, int /*argc*/, sqlite3_value** argv) {
     double p = sqlite3_value_double(argv[0]);
     int m = sqlite3_value_int(argv[1]);
@@ -3392,7 +3397,7 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
     // Robust (2-arg: column, percentile)
     rc |= FullScanWindowFunction<wf_winsorize>::register_func_2(db, "stat_winsorize");
 
-    // --- Multiple testing corrections (window: p 値集合全体を補正) ---
+    // --- Multiple testing corrections (window: corrects a whole set of p-values) ---
     rc |= FullScanWindowFunction<wf_bonferroni>::register_func_1(db, "stat_bonferroni");
     rc |= FullScanWindowFunction<wf_bh_correction>::register_func_1(db, "stat_bh_correction");
     rc |= FullScanWindowFunction<wf_holm_correction>::register_func_1(db, "stat_holm_correction");
@@ -3418,7 +3423,7 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
     // ANOVA (two-column: value, group → JSON)
     rc |= TwoColumnAggregateText<calc_anova1>::register_func(db, "stat_anova1");
 
-    // --- 群列パターン: 検定・事後検定 (9 functions) ---
+    // --- Group-column form: tests and post-hoc tests (9 functions) ---
     rc |= TwoColumnAggregateText<calc_kruskal_wallis>::register_func(db, "stat_kruskal_wallis");
     rc |= TwoColumnAggregateText<calc_levene>::register_func(db, "stat_levene");
     rc |= TwoColumnAggregateText<calc_bartlett>::register_func(db, "stat_bartlett");
