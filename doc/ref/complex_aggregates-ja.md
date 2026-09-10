@@ -1,4 +1,4 @@
-# 複合集約関数（32関数）
+# 複合集約関数（41関数）
 
 JSON 結果を返す集約関数、2標本検定、生存時間解析等。複数カラムを入力に取り、複合的な統計結果を返す。
 
@@ -424,5 +424,112 @@ SELECT stat_sample_replace(val, 10) FROM data;
 ```sql
 SELECT stat_sample(val, 5) FROM data;
 ```
+
+---
+
+## 群列パターンの検定
+
+`stat_anova1` と同じく「値列 + 群列」を取る。群は群列の値の昇順に
+0, 1, 2, … と番号が振られる。
+
+| 関数 | 構文 | 説明 |
+|---|---|---|
+| `stat_kruskal_wallis` | `stat_kruskal_wallis(val, grp)` | Kruskal-Wallis 検定 |
+| `stat_levene` | `stat_levene(val, grp)` | Levene 検定（等分散性） |
+| `stat_bartlett` | `stat_bartlett(val, grp)` | Bartlett 検定（等分散性） |
+| `stat_cohens_f` | `stat_cohens_f(val, grp)` | Cohen's f（分散分析の効果量） |
+
+`stat_kruskal_wallis` は一元配置分散分析のノンパラメトリック版で、正規性が
+疑わしい場合に使う。R の `kruskal.test()` と一致する。
+
+`stat_levene` と `stat_bartlett` は、`stat_anova1` や `stat_t_test2` が前提と
+する等分散性を検定する。Levene は**中央値基準の Brown-Forsythe 版**で、
+正規性からの逸脱に頑健であり、R の `car::leveneTest()` の既定と一致する。
+Bartlett は正規分布を前提とし、それが成り立つ場合により検出力が高い。
+R の `bartlett.test()` と一致する。
+
+いずれも `{"statistic", "p_value", "df"}` を返す。群が 2 つ未満の場合は
+NULL を返す。NULL 行は群分割の前に除外される。
+
+```sql
+-- 分散分析の前に等分散性を確認する
+SELECT stat_levene(score, class_id)  AS levene,
+       stat_bartlett(score, class_id) AS bartlett,
+       stat_anova1(score, class_id)   AS anova
+FROM exam_results;
+
+-- 正規性が疑わしい場合はノンパラメトリック検定を使う
+SELECT stat_kruskal_wallis(score, class_id) FROM exam_results;
+```
+
+---
+
+## 事後検定
+
+| 関数 | 構文 |
+|---|---|
+| `stat_tukey_hsd` | `stat_tukey_hsd(val, grp [,alpha])` |
+| `stat_bonferroni_posthoc` | `stat_bonferroni_posthoc(val, grp [,alpha])` |
+| `stat_scheffe_posthoc` | `stat_scheffe_posthoc(val, grp [,alpha])` |
+| `stat_dunnett_posthoc` | `stat_dunnett_posthoc(val, grp [,ctrl, alpha])` |
+
+`stat_anova1` が有意差を示した後に、どの群同士が異なるかを特定する。
+一元配置分散分析は内部で実行されるため、値列と群列をそのまま渡せばよい。
+`alpha` の既定値は 0.05、Dunnett の対照群添字 `ctrl` の既定値は 0。
+
+保守性は Tukey < Bonferroni < Scheffe の順に強くなる。Dunnett は対照群との
+比較のみを行うため、比較数は k(k-1)/2 ではなく k-1 になる。
+
+**戻り値**:
+
+```json
+{"method": "Tukey HSD", "alpha": 0.05, "mse": 2.5, "df_error": 12,
+ "comparisons": [
+   {"group1": 0, "group2": 1, "mean_diff": -9.0, "se": 0.707,
+    "statistic": 12.73, "p_value": 3.08e-06,
+    "lower": -11.67, "upper": -6.33, "significant": true}]}
+```
+
+> **符号の規約**: `mean_diff` は group1 - group2 であり、group1 には常に
+> 小さい方の添字が入る。R の `TukeyHSD()` は逆向き（"2-1"）で報告するため、
+> 平均差と信頼区間の上下限が R とは符号反転して見える。絶対値と p 値は同一。
+>
+> **注意**: `stat_dunnett_posthoc` は厳密な多変量 t 分布ではなく Bonferroni
+> 近似を用いるため、R の `multcomp::glht()` よりわずかに保守的になる。
+
+```sql
+-- 分散分析で有意差が出た後、どのクラス間で差があるかを調べる
+SELECT stat_tukey_hsd(score, class_id) FROM exam_results;
+
+-- 有意なペアだけを抽出する
+SELECT json_extract(c.value, '$.group1') AS g1,
+       json_extract(c.value, '$.group2') AS g2,
+       json_extract(c.value, '$.p_value') AS p
+FROM (SELECT stat_tukey_hsd(score, class_id) AS j FROM exam_results) t,
+     json_each(t.j, '$.comparisons') c
+WHERE json_extract(c.value, '$.significant');
+
+-- 全処理群を対照群（添字 0）と比較する
+SELECT stat_dunnett_posthoc(score, class_id, 0, 0.05) FROM exam_results;
+```
+
+---
+
+## 層化抽出
+
+| 関数 | 構文 |
+|---|---|
+| `stat_stratified_sample` | `stat_stratified_sample(val, grp [,ratio])` |
+
+各層から同じ**割合**で抽出するため、標本の層構成が母集団と一致する。
+`ratio` は (0, 1] の範囲で、既定値は 0.5。抽出された値の JSON 配列を返す。
+
+```sql
+-- 地域構成を保ったまま各地域から 30% を抽出する
+SELECT stat_stratified_sample(revenue, region_id, 0.3) FROM sales;
+```
+
+> **注意**: 抽出は無作為であり、現時点では再現性がない（シード指定の手段が
+> まだ提供されていない）。
 
 ---

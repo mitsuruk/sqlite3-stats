@@ -1,6 +1,6 @@
 # SQLite3 用統計関数ライブラリ
 
-SQLite3 に **249 個の統計関数** を追加するロード可能な拡張機能です。
+SQLite3 に **258 個の統計関数** を追加するロード可能な拡張機能です。
 
 [![CI](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml/badge.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://mitsuruk.github.io/sqlite3-stats/)
@@ -8,19 +8,19 @@ SQLite3 に **249 個の統計関数** を追加するロード可能な拡張�
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
-[![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
+[![Google Test](https://img.shields.io/badge/Google%20Test-424%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [English](README.md)
 
 ## 概要
 
-sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 249 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（386 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
+sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 258 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（386 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
 
-全 249 関数は 266 件の結合テストおよび 388 件の Google Test 自動テストで検証済みです。
+全 258 関数は 266 件の結合テストおよび 424 件の Google Test 自動テストで検証済みです。
 
 ### 主な特徴
 
-- **249 個の SQL 関数** — 記述統計、仮説検定、分布、リサンプリングなどをカバー
+- **258 個の SQL 関数** — 記述統計、仮説検定、分布、リサンプリングなどをカバー
 - **ランタイム依存なし** — 単一の共有ライブラリ（`.dylib` / `.so` / `.dll`）のみ
 - **標準 SQL インターフェース** — `SELECT`、`GROUP BY`、`HAVING`、サブクエリなどで使用可能
 - **ウィンドウ関数対応** — 移動統計量、移動平均、外れ値検出
@@ -71,7 +71,7 @@ cmake --build build --config Release
 以下が生成されます:
 
 - `ext_funcs.dylib` (macOS) / `ext_funcs.so` (Linux) / `ext_funcs.dll` (Windows) — ロード可能な拡張機能
-- `a.out` / `a.out.exe` — テストランナー (266 テスト)
+- `a.out` / `a.out.exe` — テストランナー (273 テスト)
 
 ### テストの実行
 
@@ -111,14 +111,14 @@ ctest --test-dir build --output-on-failure
 
 | テストファイル | 関数数 | テスト数 |
 |---|---|---|
-| basic_aggregates_test.cpp | 24 | 55 |
-| parameterized_aggregates_test.cpp | 20 | 46 |
-| two_column_aggregates_test.cpp | 27 | 57 |
-| window_functions_test.cpp | 23 | 41 |
-| complex_aggregates_test.cpp | 32 | 63 |
-| scalar_tests_helpers_test.cpp | 40 | 43 |
-| scalar_distributions_test.cpp | 83 | 83 |
-| **合計** | **249** | **388** |
+| basic_aggregates_test.cpp | 24 | 61 |
+| parameterized_aggregates_test.cpp | 20 | 49 |
+| two_column_aggregates_test.cpp | 27 | 56 |
+| window_functions_test.cpp | 26 | 46 |
+| complex_aggregates_test.cpp | 41 | 80 |
+| scalar_tests_helpers_test.cpp | 37 | 42 |
+| scalar_distributions_test.cpp | 83 | 90 |
+| **合計** | **258** | **424** |
 
 ### 拡張機能のロード
 
@@ -197,7 +197,7 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- 効果量=0.5, alpha=0.05, 検出力=0.80
 
 ## 関数リファレンス
 
-全 249 関数の詳細ドキュメント:
+全 258 関数の詳細ドキュメント:
 
 - [関数リファレンス（ハブ）](doc/function_reference-ja.md)
   - [基本集約関数（24）](doc/ref/basic_aggregates-ja.md)
@@ -225,7 +225,7 @@ sqlite3-stats/
 │   ├── scalar_tests_helpers_test.cpp      # 40 関数, 43 テスト
 │   └── scalar_distributions_test.cpp      # 83 関数, 83 テスト
 ├── src/
-│   ├── ext_funcs.cpp                      # 拡張機能: 249 個の SQL 関数
+│   ├── ext_funcs.cpp                      # 拡張機能: 258 個の SQL 関数
 │   ├── main.cpp                           # レガシーテストランナー（266 テスト）
 │   └── include/                           # ローカルヘッダー
 ├── doc/
@@ -264,7 +264,7 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 | --- | --- | --- |
 | C++ ライブラリ | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 ヘッダーオンリー統計ライブラリ (386 関数) |
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | UNIX パイプライン向けコマンドラインツール |
-| SQL (SQLite3) | **sqlite3-stats** (このリポジトリ) | SQLite3 ロード可能な拡張機能 (249 関数) |
+| SQL (SQLite3) | **sqlite3-stats** (このリポジトリ) | SQLite3 ロード可能な拡張機能 (258 関数) |
 
 **対応 statcpp バージョン**: v0.2.0 以降
 

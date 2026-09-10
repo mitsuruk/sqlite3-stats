@@ -1,16 +1,16 @@
 # Statistical Functions for SQLite3
 
-A loadable extension that adds **249 statistical functions** to SQLite3.
+A loadable extension that adds **258 statistical functions** to SQLite3.
 
 ## Overview
 
-sqlite3StatisticalLibrary is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
+sqlite3StatisticalLibrary is a SQLite3 loadable extension that provides 258 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
-All 249 functions are verified by 266 integration tests.
+All 258 functions are verified by 266 integration tests.
 
 ### Key Features
 
-- **249 SQL functions** covering descriptive statistics, hypothesis testing, distributions, resampling, and more
+- **258 SQL functions** covering descriptive statistics, hypothesis testing, distributions, resampling, and more
 - **Zero dependencies at runtime** — a single shared library (`.dylib` / `.so` / `.dll`)
 - **Standard SQL interface** — use with `SELECT`, `GROUP BY`, `HAVING`, subqueries, etc.
 - **Window function support** — rolling statistics, moving averages, outlier detection
@@ -68,7 +68,7 @@ SELECT stat_normal_quantile(0.975, 0, 1);  -- 1.96
 
 ## Documentation
 
-- [Function Reference](function_reference.md) — All 249 functions overview
+- [Function Reference](function_reference.md) — All 258 functions overview
 - [Load Extension Guide](sqlite3lib_LOAD_EXTENSION.md) — How to load the extension
 
 ## License

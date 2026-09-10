@@ -626,3 +626,218 @@ TEST_F(ComplexAggregates, SampleEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_sample(val, 3) FROM empty_data"));
 }
+
+// =====================================================================
+// 33-41. 群列パターン (value, group)
+//
+// stat_anova1 と同じ「値列 + 群列」形式を取る検定・事後検定.
+// 期待値は R 4.4.2 の実測値を使用する.
+//   v <- c(10,12,14,11,13, 20,30,15,25,40, 15,17,16,18,14)
+//   g <- factor(rep(1:3, each = 5))
+// =====================================================================
+
+/// @brief 群列テスト用のデータを作成する(3群・分散が不均一)
+static void create_group_table(sqlite3* db) {
+    exec_sql(db, "CREATE TABLE g3(val REAL, grp INT)");
+    exec_sql(db,
+        "INSERT INTO g3 VALUES "
+        "(10,1),(12,1),(14,1),(11,1),(13,1),"
+        "(20,2),(30,2),(15,2),(25,2),(40,2),"
+        "(15,3),(17,3),(16,3),(18,3),(14,3)");
+}
+
+/// @brief 群列テスト用のデータを作成する(3群・等分散, 事後検定用)
+static void create_balanced_group_table(sqlite3* db) {
+    exec_sql(db, "CREATE TABLE gb(val REAL, grp INT)");
+    exec_sql(db,
+        "INSERT INTO gb VALUES "
+        "(10,1),(12,1),(14,1),(11,1),(13,1),"
+        "(20,2),(22,2),(19,2),(21,2),(23,2),"
+        "(15,3),(17,3),(16,3),(18,3),(14,3)");
+}
+
+/// @brief 正常系: Kruskal-Wallis 検定が R の kruskal.test() と一致する
+TEST_F(ComplexAggregates, KruskalWallisMatchesR) {
+    create_group_table(db_);
+    std::string r = query_text(db_, "SELECT stat_kruskal_wallis(val, grp) FROM g3");
+    ASSERT_FALSE(r.empty());
+    EXPECT_NEAR(json_double(db_, r, "$.statistic"), 10.75341, 1e-4);
+    EXPECT_NEAR(json_double(db_, r, "$.p_value"), 0.004623041, 1e-8);
+    EXPECT_NEAR(json_double(db_, r, "$.df"), 2.0, 1e-9);
+}
+
+/// @brief 正常系: Levene 検定が R の car::leveneTest() と一致する
+///        (statcpp は中央値基準の Brown-Forsythe 版. car の既定と同じ)
+TEST_F(ComplexAggregates, LeveneMatchesR) {
+    create_group_table(db_);
+    std::string r = query_text(db_, "SELECT stat_levene(val, grp) FROM g3");
+    ASSERT_FALSE(r.empty());
+    EXPECT_NEAR(json_double(db_, r, "$.statistic"), 4.961652, 1e-5);
+    EXPECT_NEAR(json_double(db_, r, "$.p_value"), 0.02689376, 1e-7);
+}
+
+/// @brief 正常系: Bartlett 検定が R の bartlett.test() と一致する
+TEST_F(ComplexAggregates, BartlettMatchesR) {
+    create_group_table(db_);
+    std::string r = query_text(db_, "SELECT stat_bartlett(val, grp) FROM g3");
+    ASSERT_FALSE(r.empty());
+    EXPECT_NEAR(json_double(db_, r, "$.statistic"), 14.70215, 1e-4);
+    EXPECT_NEAR(json_double(db_, r, "$.p_value"), 0.0006419024, 1e-9);
+}
+
+/// @brief 境界値: 全群の分散が等しい場合, Levene/Bartlett は F=0, p=1 を返す
+TEST_F(ComplexAggregates, EqualVarianceGivesZeroStatistic) {
+    create_balanced_group_table(db_);
+    for (const char* fn : {"stat_levene", "stat_bartlett"}) {
+        std::string sql = "SELECT ";
+        sql += fn;
+        sql += "(val, grp) FROM gb";
+        std::string r = query_text(db_, sql.c_str());
+        ASSERT_FALSE(r.empty()) << fn;
+        EXPECT_NEAR(json_double(db_, r, "$.statistic"), 0.0, 1e-9) << fn;
+        EXPECT_NEAR(json_double(db_, r, "$.p_value"), 1.0, 1e-9) << fn;
+    }
+}
+
+/// @brief 正常系: Cohen's f が R の sqrt(eta2/(1-eta2)) と一致する
+TEST_F(ComplexAggregates, CohensFMatchesR) {
+    create_group_table(db_);
+    double f = query_double(db_, "SELECT stat_cohens_f(val, grp) FROM g3");
+    EXPECT_NEAR(f, 1.154701, 1e-6);
+}
+
+/// @brief 正常系: Tukey HSD が R の TukeyHSD() と一致する
+///        statcpp は group1 - group2 (添字の小さい方が基準), R は逆向きに
+///        報告するため, 平均差と信頼区間の符号が反転する
+TEST_F(ComplexAggregates, TukeyHsdMatchesR) {
+    create_balanced_group_table(db_);
+    std::string r = query_text(db_, "SELECT stat_tukey_hsd(val, grp) FROM gb");
+    ASSERT_FALSE(r.empty());
+    EXPECT_NEAR(json_double(db_, r, "$.alpha"), 0.05, 1e-9);
+    EXPECT_NEAR(json_double(db_, r, "$.mse"), 2.5, 1e-9);
+    EXPECT_NEAR(json_double(db_, r, "$.df_error"), 12.0, 1e-9);
+    // R: 2-1 diff=9, lwr=6.332136, upr=11.667864, p adj=0.0000031
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].mean_diff"), -9.0, 1e-9);
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].lower"), -11.667864, 1e-5);
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].upper"), -6.332136, 1e-5);
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[0].p_value"), 3.07581e-06, 1e-10);
+    // R: 3-2 diff=-5, p adj=0.0008342 → 添字では group1=1, group2=2 の +5
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[2].mean_diff"), 5.0, 1e-9);
+    EXPECT_NEAR(json_double(db_, r, "$.comparisons[2].p_value"), 0.00083421, 1e-8);
+}
+
+/// @brief 正常系: 3群の全ペア比較なので comparisons は 3 要素
+TEST_F(ComplexAggregates, PosthocComparisonCount) {
+    create_balanced_group_table(db_);
+    for (const char* fn : {"stat_tukey_hsd", "stat_bonferroni_posthoc",
+                           "stat_scheffe_posthoc"}) {
+        std::string sql = "SELECT json_array_length(";
+        sql += fn;
+        sql += "(val, grp), '$.comparisons') FROM gb";
+        EXPECT_NEAR(query_double(db_, sql.c_str()), 3.0, 1e-9) << fn;
+    }
+    // Dunnett は対照群との比較のみなので k-1 = 2 要素
+    EXPECT_NEAR(query_double(db_,
+        "SELECT json_array_length(stat_dunnett_posthoc(val, grp), "
+        "'$.comparisons') FROM gb"), 2.0, 1e-9);
+}
+
+/// @brief 正常系: alpha を省略すると 0.05, 指定するとその値が使われる
+TEST_F(ComplexAggregates, PosthocAlphaIsConfigurable) {
+    create_balanced_group_table(db_);
+    EXPECT_NEAR(query_double(db_,
+        "SELECT json_extract(stat_tukey_hsd(val, grp), '$.alpha') FROM gb"),
+        0.05, 1e-9);
+    EXPECT_NEAR(query_double(db_,
+        "SELECT json_extract(stat_tukey_hsd(val, grp, 0.01), '$.alpha') FROM gb"),
+        0.01, 1e-9);
+}
+
+/// @brief 正常系: Scheffe は Tukey より保守的なので p 値が大きくなる
+TEST_F(ComplexAggregates, ScheffeIsMoreConservativeThanTukey) {
+    create_balanced_group_table(db_);
+    double tukey = query_double(db_,
+        "SELECT json_extract(stat_tukey_hsd(val, grp), "
+        "'$.comparisons[1].p_value') FROM gb");
+    double scheffe = query_double(db_,
+        "SELECT json_extract(stat_scheffe_posthoc(val, grp), "
+        "'$.comparisons[1].p_value') FROM gb");
+    EXPECT_GT(scheffe, tukey);
+}
+
+/// @brief 異常系: 群が 1 つしかない場合は NULL を返す
+TEST_F(ComplexAggregates, GroupFunctionsRequireTwoGroups) {
+    exec_sql(db_, "CREATE TABLE g1(val REAL, grp INT)");
+    exec_sql(db_, "INSERT INTO g1 VALUES (1,1),(2,1),(3,1)");
+    for (const char* fn : {"stat_kruskal_wallis", "stat_levene", "stat_bartlett",
+                           "stat_cohens_f", "stat_tukey_hsd",
+                           "stat_bonferroni_posthoc", "stat_scheffe_posthoc",
+                           "stat_dunnett_posthoc"}) {
+        std::string sql = "SELECT ";
+        sql += fn;
+        sql += "(val, grp) FROM g1";
+        EXPECT_TRUE(query_is_null(db_, sql.c_str())) << fn;
+    }
+}
+
+/// @brief 異常系: 空テーブル → NULL
+TEST_F(ComplexAggregates, GroupFunctionsEmpty) {
+    for (const char* fn : {"stat_kruskal_wallis", "stat_levene", "stat_bartlett",
+                           "stat_cohens_f", "stat_tukey_hsd",
+                           "stat_stratified_sample"}) {
+        std::string sql = "SELECT ";
+        sql += fn;
+        sql += "(val, val) FROM empty_data";
+        EXPECT_TRUE(query_is_null(db_, sql.c_str())) << fn;
+    }
+}
+
+/// @brief 異常系: 対照群の添字が群数を超える場合は NULL
+TEST_F(ComplexAggregates, DunnettRejectsOutOfRangeControl) {
+    create_balanced_group_table(db_);
+    EXPECT_TRUE(query_is_null(
+        db_, "SELECT stat_dunnett_posthoc(val, grp, 9, 0.05) FROM gb"));
+}
+
+/// @brief 異常系: NULL 行は群分割から除外される
+TEST_F(ComplexAggregates, GroupFunctionsSkipNulls) {
+    exec_sql(db_, "CREATE TABLE gn(val REAL, grp INT)");
+    exec_sql(db_, "INSERT INTO gn VALUES "
+                  "(10,1),(NULL,1),(12,1),(14,1),(20,2),(22,2),(NULL,2),(19,2)");
+    std::string r = query_text(db_, "SELECT stat_bartlett(val, grp) FROM gn");
+    ASSERT_FALSE(r.empty());
+    // NULL を除いた 3 件ずつで検定されるため df = k - 1 = 1
+    EXPECT_NEAR(json_double(db_, r, "$.df"), 1.0, 1e-9);
+}
+
+/// @brief 正常系: 層化抽出は各層から抽出率に応じた件数を取る
+TEST_F(ComplexAggregates, StratifiedSampleRespectsRatio) {
+    create_balanced_group_table(db_);
+    // 各群 5 件 × 3 群. 抽出率 0.4 → 各群 2 件 = 計 6 件
+    double n = query_double(db_,
+        "SELECT json_array_length(stat_stratified_sample(val, grp, 0.4)) FROM gb");
+    EXPECT_NEAR(n, 6.0, 1e-9);
+}
+
+/// @brief 境界値: 抽出率 1.0 では全件が返る
+TEST_F(ComplexAggregates, StratifiedSampleFullRatio) {
+    create_balanced_group_table(db_);
+    double n = query_double(db_,
+        "SELECT json_array_length(stat_stratified_sample(val, grp, 1.0)) FROM gb");
+    EXPECT_NEAR(n, 15.0, 1e-9);
+}
+
+/// @brief 正常系: Dunnett は 2/3/4 引数のいずれの形式でも呼べる
+///        (末尾のパラメータから順に省略できる)
+TEST_F(ComplexAggregates, DunnettAcceptsAllArities) {
+    create_balanced_group_table(db_);
+    const char* sqls[] = {
+        "SELECT json_extract(stat_dunnett_posthoc(val, grp), '$.alpha') FROM gb",
+        "SELECT json_extract(stat_dunnett_posthoc(val, grp, 1), '$.alpha') FROM gb",
+        "SELECT json_extract(stat_dunnett_posthoc(val, grp, 1, 0.01), '$.alpha') "
+        "FROM gb",
+    };
+    EXPECT_NEAR(query_double(db_, sqls[0]), 0.05, 1e-9);
+    EXPECT_NEAR(query_double(db_, sqls[1]), 0.05, 1e-9);
+    EXPECT_NEAR(query_double(db_, sqls[2]), 0.01, 1e-9);
+}

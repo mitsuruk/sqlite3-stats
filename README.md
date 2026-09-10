@@ -1,6 +1,6 @@
 # Statistical Functions for SQLite3
 
-A loadable extension that adds **249 statistical functions** to SQLite3.
+A loadable extension that adds **258 statistical functions** to SQLite3.
 
 [![CI](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml/badge.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Docs](https://img.shields.io/badge/docs-online-brightgreen.svg)](https://mitsuruk.github.io/sqlite3-stats/)
@@ -8,19 +8,19 @@ A loadable extension that adds **249 statistical functions** to SQLite3.
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
-[![Google Test](https://img.shields.io/badge/Google%20Test-388%20passed-brightgreen.svg)](https://github.com/google/googletest)
+[![Google Test](https://img.shields.io/badge/Google%20Test-424%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [日本語](README-ja.md)
 
 ## Overview
 
-sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 249 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
+sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 258 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
-All 249 functions are verified by 266 integration tests and 388 Google Test automated tests.
+All 258 functions are verified by 266 integration tests and 424 Google Test automated tests.
 
 ### Key Features
 
-- **249 SQL functions** covering descriptive statistics, hypothesis testing, distributions, resampling, and more
+- **258 SQL functions** covering descriptive statistics, hypothesis testing, distributions, resampling, and more
 - **Zero dependencies at runtime** — a single shared library (`.dylib` / `.so` / `.dll`)
 - **Standard SQL interface** — use with `SELECT`, `GROUP BY`, `HAVING`, subqueries, etc.
 - **Window function support** — rolling statistics, moving averages, outlier detection
@@ -111,14 +111,14 @@ ctest --test-dir build --output-on-failure
 
 | Test file | Functions | Tests |
 |---|---|---|
-| basic_aggregates_test.cpp | 24 | 55 |
-| parameterized_aggregates_test.cpp | 20 | 46 |
-| two_column_aggregates_test.cpp | 27 | 57 |
-| window_functions_test.cpp | 23 | 41 |
-| complex_aggregates_test.cpp | 32 | 63 |
-| scalar_tests_helpers_test.cpp | 40 | 43 |
-| scalar_distributions_test.cpp | 83 | 83 |
-| **Total** | **249** | **388** |
+| basic_aggregates_test.cpp | 24 | 61 |
+| parameterized_aggregates_test.cpp | 20 | 49 |
+| two_column_aggregates_test.cpp | 27 | 56 |
+| window_functions_test.cpp | 26 | 46 |
+| complex_aggregates_test.cpp | 41 | 80 |
+| scalar_tests_helpers_test.cpp | 37 | 42 |
+| scalar_distributions_test.cpp | 83 | 90 |
+| **Total** | **258** | **424** |
 
 ### Load the Extension
 
@@ -197,7 +197,7 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- effect size=0.5, alpha=0.05, power=0.80
 
 ## Function Reference
 
-Full documentation for all 249 functions:
+Full documentation for all 258 functions:
 
 - [Function Reference (hub)](doc/function_reference.md)
   - [Basic Aggregates (24)](doc/ref/basic_aggregates.md)
@@ -225,7 +225,7 @@ sqlite3-stats/
 │   ├── scalar_tests_helpers_test.cpp      # 40 functions, 43 tests
 │   └── scalar_distributions_test.cpp      # 83 functions, 83 tests
 ├── src/
-│   ├── ext_funcs.cpp                      # Extension: 249 SQL functions
+│   ├── ext_funcs.cpp                      # Extension: 258 SQL functions
 │   ├── main.cpp                           # Legacy test runner (266 tests)
 │   └── include/                           # Local headers
 ├── doc/
@@ -264,7 +264,7 @@ sqlite3-stats is part of the **statcpp family**. Choose the one that fits your u
 | --- | --- | --- |
 | C++ library | [statcpp](https://github.com/mitsuruk/statcpp) | C++17 header-only statistics library (386 functions) |
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | Command-line interface for UNIX pipelines |
-| SQL (SQLite3) | **sqlite3-stats** (this repo) | SQLite3 loadable extension (249 functions) |
+| SQL (SQLite3) | **sqlite3-stats** (this repo) | SQLite3 loadable extension (258 functions) |
 
 **Required statcpp version**: v0.2.0 or later
 

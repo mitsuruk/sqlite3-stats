@@ -1,4 +1,4 @@
-# Complex Aggregates (32 Functions)
+# Complex Aggregates (41 Functions)
 
 Aggregate functions returning JSON results, two-sample tests, survival analysis, and more. These functions take multiple columns as input and return complex statistical results.
 
@@ -424,5 +424,116 @@ Returns **sampling without replacement** (no duplicates) as a JSON array.
 ```sql
 SELECT stat_sample(val, 5) FROM data;
 ```
+
+---
+
+## Group-Column Tests
+
+Take a value column and a group column, exactly like `stat_anova1`. Groups are
+numbered 0, 1, 2, … in ascending order of the group column's values.
+
+| Function | Syntax | Description |
+|---|---|---|
+| `stat_kruskal_wallis` | `(val, grp)` | Kruskal-Wallis test |
+| `stat_levene` | `(val, grp)` | Levene test (homogeneity) |
+| `stat_bartlett` | `(val, grp)` | Bartlett test (homogeneity) |
+| `stat_cohens_f` | `(val, grp)` | Cohen's f (ANOVA effect size) |
+
+`stat_kruskal_wallis` is the nonparametric counterpart of one-way ANOVA,
+used when normality is doubtful. Results match R's `kruskal.test()`.
+
+`stat_levene` and `stat_bartlett` test the equal-variance assumption that
+`stat_anova1` and `stat_t_test2` rely on. Levene uses the **median-based
+Brown-Forsythe** form, which is robust to non-normality and matches the default
+of R's `car::leveneTest()`. Bartlett assumes normality and is more powerful when
+that holds, matching R's `bartlett.test()`.
+
+All three return `{"statistic", "p_value", "df"}` and yield NULL when fewer than
+two groups are present. NULL rows are excluded before grouping.
+
+```sql
+-- Check the equal-variance assumption before running ANOVA
+SELECT stat_levene(score, class_id)  AS levene,
+       stat_bartlett(score, class_id) AS bartlett,
+       stat_anova1(score, class_id)   AS anova
+FROM exam_results;
+
+-- Use the nonparametric test when normality is doubtful
+SELECT stat_kruskal_wallis(score, class_id) FROM exam_results;
+```
+
+---
+
+## Post-hoc Tests
+
+| Function | Syntax | Scope |
+|---|---|---|
+| `stat_tukey_hsd` | `(val, grp [,alpha])` | all pairs |
+| `stat_bonferroni_posthoc` | `(val, grp [,alpha])` | all pairs |
+| `stat_scheffe_posthoc` | `(val, grp [,alpha])` | all pairs |
+| `stat_dunnett_posthoc` | `(val, grp [,ctrl, alpha])` | vs. control |
+
+Run after `stat_anova1` reports a significant difference, to identify which
+groups differ. One-way ANOVA is computed internally, so these are called on the
+raw value and group columns. `alpha` defaults to 0.05; `ctrl` (the control
+group index for Dunnett) defaults to 0.
+
+Conservativeness increases Tukey < Bonferroni < Scheffe. Dunnett compares every
+group against one control only, giving k-1 comparisons instead of k(k-1)/2.
+
+**Return value**:
+
+```json
+{"method": "Tukey HSD", "alpha": 0.05, "mse": 2.5, "df_error": 12,
+ "comparisons": [
+   {"group1": 0, "group2": 1, "mean_diff": -9.0, "se": 0.707,
+    "statistic": 12.73, "p_value": 3.08e-06,
+    "lower": -11.67, "upper": -6.33, "significant": true}]}
+```
+
+> **Sign convention**: `mean_diff` is group1 - group2, where group1 always has
+> the lower index. R's `TukeyHSD()` reports the opposite direction ("2-1"), so
+> the mean difference and both interval bounds appear negated relative to R.
+> Magnitudes and p-values are identical.
+>
+> **Note**: `stat_dunnett_posthoc` uses a Bonferroni approximation rather than
+> the exact multivariate t distribution, so it is slightly conservative
+> compared with R's `multcomp::glht()`.
+
+```sql
+-- Identify which classes differ after a significant ANOVA
+SELECT stat_tukey_hsd(score, class_id) FROM exam_results;
+
+-- Extract only the significant pairs
+SELECT json_extract(c.value, '$.group1') AS g1,
+       json_extract(c.value, '$.group2') AS g2,
+       json_extract(c.value, '$.p_value') AS p
+FROM (SELECT stat_tukey_hsd(score, class_id) AS j FROM exam_results) t,
+     json_each(t.j, '$.comparisons') c
+WHERE json_extract(c.value, '$.significant');
+
+-- Compare every treatment against the control group (index 0)
+SELECT stat_dunnett_posthoc(score, class_id, 0, 0.05) FROM exam_results;
+```
+
+---
+
+## Stratified Sampling
+
+| Function | Syntax |
+|---|---|
+| `stat_stratified_sample` | `(val, grp [,ratio])` |
+
+Draws the same **proportion** from each stratum, so the group composition of the
+sample matches the population. `ratio` is in (0, 1] and defaults to 0.5.
+Returns a JSON array of the sampled values.
+
+```sql
+-- Take 30% of each region, preserving regional proportions
+SELECT stat_stratified_sample(revenue, region_id, 0.3) FROM sales;
+```
+
+> **Note**: the sample is random and is not currently reproducible; there is no
+> seed control yet.
 
 ---

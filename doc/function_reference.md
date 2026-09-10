@@ -14,13 +14,13 @@ This reference covers a total of **249 functions**.
 | [Parameterized Aggregate Functions](ref/parameterized_aggregates.md) | 20 | Aggregates with parameters: `SELECT stat_xxx(col, param) FROM table` |
 | [Two-Column Aggregate Functions](ref/two_column_aggregates.md) | 27 | Two-column input aggregates: `SELECT stat_xxx(col1, col2) FROM table` |
 | [Window Functions](ref/window_functions.md) | 26 | Full-scan window functions that return a value per row |
-| [Complex Aggregate Functions](ref/complex_aggregates.md) | 32 | Aggregate functions returning JSON results, two-sample tests, survival analysis, etc. |
+| [Complex Aggregate Functions](ref/complex_aggregates.md) | 41 | Aggregate functions returning JSON results, two-sample tests, survival analysis, etc. |
 | [Scalar Functions — Test Helpers](ref/scalar_tests_helpers.md) | 40 | DB-independent: distribution functions, special functions, proportion tests, multiple testing corrections, etc. |
 | [Scalar Functions — Distributions & Transformations](ref/scalar_distributions.md) | 83 | DB-independent: additional distribution functions, effect size conversions, power analysis, etc. |
 
 - **Basic Aggregate Functions through Two-Column Aggregate Functions** (71 functions) are all **aggregate functions** and can be used in any context where SQLite3 standard aggregate functions are available, including `GROUP BY`, `HAVING`, and subqueries.
 - **Window Functions** (26 functions) are implemented as full-scan type and return one value per row.
-- **Complex Aggregate Functions** (32 functions) are **aggregate functions** (including those returning JSON results).
+- **Complex Aggregate Functions** (41 functions) are **aggregate functions** (including those returning JSON results).
 - **Scalar Functions** (123 functions) compute results solely from their parameters.
 
 ---
@@ -234,7 +234,7 @@ GROUP BY category;
 | `stat_bh_correction(p)` | Benjamini-Hochberg correction | REAL/row | [Details](ref/window_functions.md#multiple-testing-corrections) |
 | `stat_holm_correction(p)` | Holm correction | REAL/row | [Details](ref/window_functions.md#multiple-testing-corrections) |
 
-### Complex Aggregate Functions (32 functions)
+### Complex Aggregate Functions (41 functions)
 
 | Function | Description | Return | Details |
 |---|---|---|---|
@@ -251,6 +251,15 @@ GROUP BY category;
 | `stat_f_test(grp1, grp2)` | F-test | JSON | [Details](ref/complex_aggregates.md#stat_f_test) |
 | `stat_mann_whitney(grp1, grp2)` | Mann-Whitney U test | JSON | [Details](ref/complex_aggregates.md#stat_mann_whitney) |
 | `stat_anova1(val, grp)` | One-way ANOVA | JSON | [Details](ref/complex_aggregates.md#stat_anova1) |
+| `stat_kruskal_wallis(val, grp)` | Kruskal-Wallis test | JSON | [Details](ref/complex_aggregates.md#group-column-tests) |
+| `stat_levene(val, grp)` | Levene test (homogeneity) | JSON | [Details](ref/complex_aggregates.md#group-column-tests) |
+| `stat_bartlett(val, grp)` | Bartlett test (homogeneity) | JSON | [Details](ref/complex_aggregates.md#group-column-tests) |
+| `stat_cohens_f(val, grp)` | Cohen's f (ANOVA effect size) | REAL | [Details](ref/complex_aggregates.md#group-column-tests) |
+| `stat_tukey_hsd(val, grp [,alpha])` | Tukey HSD post-hoc | JSON | [Details](ref/complex_aggregates.md#post-hoc-tests) |
+| `stat_bonferroni_posthoc(val, grp [,alpha])` | Bonferroni post-hoc | JSON | [Details](ref/complex_aggregates.md#post-hoc-tests) |
+| `stat_scheffe_posthoc(val, grp [,alpha])` | Scheffe post-hoc | JSON | [Details](ref/complex_aggregates.md#post-hoc-tests) |
+| `stat_dunnett_posthoc(val, grp [,ctrl, alpha])` | Dunnett post-hoc | JSON | [Details](ref/complex_aggregates.md#post-hoc-tests) |
+| `stat_stratified_sample(val, grp [,ratio])` | Stratified random sample | JSON | [Details](ref/complex_aggregates.md#stratified-sampling) |
 | `stat_contingency_table(col1, col2)` | Contingency table | JSON | [Details](ref/complex_aggregates.md#stat_contingency_table) |
 | `stat_cohens_d2(grp1, grp2)` | Cohen's d (two-sample) | REAL | [Details](ref/complex_aggregates.md#stat_cohens_d2) |
 | `stat_hedges_g2(grp1, grp2)` | Hedges' g (two-sample) | REAL | [Details](ref/complex_aggregates.md#stat_hedges_g2) |

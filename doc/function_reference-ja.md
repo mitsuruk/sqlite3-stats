@@ -12,13 +12,13 @@
 | [パラメータ付き集約関数](ref/parameterized_aggregates-ja.md) | 20 | 引数付き集約: `SELECT stat_xxx(col, param) FROM table` |
 | [2カラム集約関数](ref/two_column_aggregates-ja.md) | 27 | 2列入力集約: `SELECT stat_xxx(col1, col2) FROM table` |
 | [ウィンドウ関数](ref/window_functions-ja.md) | 26 | 行ごとに値を返す全行スキャン型ウィンドウ関数 |
-| [複合集約関数](ref/complex_aggregates-ja.md) | 32 | JSON結果を返す集約関数、2標本検定、生存時間解析等 |
+| [複合集約関数](ref/complex_aggregates-ja.md) | 41 | JSON結果を返す集約関数、2標本検定、生存時間解析等 |
 | [スカラー関数 — 検定補助](ref/scalar_tests_helpers-ja.md) | 40 | DB非依存: 分布関数、特殊関数、比率検定、多重検定補正等 |
 | [スカラー関数 — 分布・変換](ref/scalar_distributions-ja.md) | 83 | DB非依存: 追加分布関数、効果量変換、検出力分析等 |
 
 - **基本集約関数〜2カラム集約関数**（71関数）はすべて**集約関数**であり、`GROUP BY`、`HAVING`、サブクエリなど SQLite3 の標準的な集約関数が使えるすべての文脈で利用可能。
 - **ウィンドウ関数**（26関数）は全行スキャン型として実装されており、各行に対して1つの値を返す。
-- **複合集約関数**（32関数）は**集約関数**（JSON 結果を返すものを含む）。
+- **複合集約関数**（41関数）は**集約関数**（JSON 結果を返すものを含む）。
 - **スカラー関数**（123関数）はパラメータのみで計算が完結する。
 
 ---
@@ -232,7 +232,7 @@ GROUP BY category;
 | `stat_bh_correction(p)` | Benjamini-Hochberg 補正 | REAL/行 | [詳細](ref/window_functions-ja.md#多重比較補正) |
 | `stat_holm_correction(p)` | Holm 補正 | REAL/行 | [詳細](ref/window_functions-ja.md#多重比較補正) |
 
-### 複合集約関数（32関数）
+### 複合集約関数（41関数）
 
 | 関数名 | 説明 | 戻り値 | 詳細 |
 |---|---|---|---|
@@ -249,6 +249,15 @@ GROUP BY category;
 | `stat_f_test(grp1, grp2)` | F 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_f_test) |
 | `stat_mann_whitney(grp1, grp2)` | Mann-Whitney U 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_mann_whitney) |
 | `stat_anova1(val, grp)` | 一元配置分散分析 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_anova1) |
+| `stat_kruskal_wallis(val, grp)` | Kruskal-Wallis 検定 | JSON | [詳細](ref/complex_aggregates-ja.md#群列パターンの検定) |
+| `stat_levene(val, grp)` | Levene 検定（等分散性） | JSON | [詳細](ref/complex_aggregates-ja.md#群列パターンの検定) |
+| `stat_bartlett(val, grp)` | Bartlett 検定（等分散性） | JSON | [詳細](ref/complex_aggregates-ja.md#群列パターンの検定) |
+| `stat_cohens_f(val, grp)` | Cohen's f（分散分析の効果量） | REAL | [詳細](ref/complex_aggregates-ja.md#群列パターンの検定) |
+| `stat_tukey_hsd(val, grp [,alpha])` | Tukey HSD 事後検定 | JSON | [詳細](ref/complex_aggregates-ja.md#事後検定) |
+| `stat_bonferroni_posthoc(val, grp [,alpha])` | Bonferroni 事後検定 | JSON | [詳細](ref/complex_aggregates-ja.md#事後検定) |
+| `stat_scheffe_posthoc(val, grp [,alpha])` | Scheffe 事後検定 | JSON | [詳細](ref/complex_aggregates-ja.md#事後検定) |
+| `stat_dunnett_posthoc(val, grp [,ctrl, alpha])` | Dunnett 事後検定 | JSON | [詳細](ref/complex_aggregates-ja.md#事後検定) |
+| `stat_stratified_sample(val, grp [,ratio])` | 層化無作為抽出 | JSON | [詳細](ref/complex_aggregates-ja.md#層化抽出) |
 | `stat_contingency_table(col1, col2)` | 分割表 | JSON | [詳細](ref/complex_aggregates-ja.md#stat_contingency_table) |
 | `stat_cohens_d2(grp1, grp2)` | Cohen's d（2標本） | REAL | [詳細](ref/complex_aggregates-ja.md#stat_cohens_d2) |
 | `stat_hedges_g2(grp1, grp2)` | Hedges' g（2標本） | REAL | [詳細](ref/complex_aggregates-ja.md#stat_hedges_g2) |

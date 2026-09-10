@@ -1,5 +1,5 @@
 site_name: sqlite3StatisticalLibrary
-site_description: A loadable extension that adds 249 statistical functions to SQLite3
+site_description: A loadable extension that adds 258 statistical functions to SQLite3
 site_url: https://mitsuruk.github.io/sqlite3-stats/
 
 docs_dir: doc

@@ -46,7 +46,7 @@ static bool exec_sql(sqlite3* db, const char* sql, const char* label = nullptr) 
 }
 
 int main() {
-    std::cout << "=== SQLite3 Statistical Functions Test (249 functions) ===\n";
+    std::cout << "=== SQLite3 Statistical Functions Test (258 functions) ===\n";
     std::cout << "SQLite3 version: " << sqlite3_libversion() << "\n\n";
 
     // Open in-memory database
@@ -955,6 +955,45 @@ int main() {
     exec_sql(db,
         "SELECT stat_anova1(val, CAST(grp AS REAL)) FROM grp_data;",
         "\n[124] stat_anova1 — one-way ANOVA");
+
+    // 群列パターン: 3群データを用意して検定・事後検定を実演する
+    // 期待値は R 4.4.2 の実測値
+    exec_sql(db, "CREATE TABLE g3(val REAL, grp REAL);", nullptr);
+    exec_sql(db,
+        "INSERT INTO g3 VALUES"
+        "(10,1),(12,1),(14,1),(11,1),(13,1),"
+        "(20,30),(30,30),(15,30),(25,30),(40,30),"
+        "(15,50),(17,50),(16,50),(18,50),(14,50);", nullptr);
+
+    exec_sql(db,
+        "SELECT stat_kruskal_wallis(val, grp) FROM g3;",
+        "\n[124a] stat_kruskal_wallis — R: statistic=10.75341, p=0.004623041");
+
+    exec_sql(db,
+        "SELECT stat_levene(val, grp) FROM g3;",
+        "\n[124b] stat_levene — R car::leveneTest: statistic=4.961652, p=0.02689376");
+
+    exec_sql(db,
+        "SELECT stat_bartlett(val, grp) FROM g3;",
+        "\n[124c] stat_bartlett — R: statistic=14.70215, p=0.0006419024");
+
+    exec_sql(db,
+        "SELECT stat_cohens_f(val, grp) FROM g3;",
+        "\n[124d] stat_cohens_f — R: 1.154701");
+
+    exec_sql(db,
+        "SELECT json_extract(stat_tukey_hsd(val, grp), '$.comparisons[0].p_value') "
+        "FROM g3;",
+        "\n[124e] stat_tukey_hsd — 群0 vs 群1 の調整済み p 値");
+
+    exec_sql(db,
+        "SELECT json_array_length(stat_dunnett_posthoc(val, grp, 0), "
+        "'$.comparisons') FROM g3;",
+        "\n[124f] stat_dunnett_posthoc — 対照群比較なので k-1 = 2 件");
+
+    exec_sql(db,
+        "SELECT json_array_length(stat_stratified_sample(val, grp, 0.4)) FROM g3;",
+        "\n[124g] stat_stratified_sample — 各群 5 件の 40% = 計 6 件");
 
     exec_sql(db,
         "SELECT stat_contingency_table(x, y) FROM cat_data;",

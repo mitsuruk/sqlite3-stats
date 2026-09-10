@@ -856,6 +856,92 @@ private:
 
 };
 
+// --- C variant: with extra parameter(s), returns JSON text ---
+//
+// TwoColumnAggregateText にパラメータを加えたもの. 群列を伴う事後検定
+// (alpha を取る) や層化抽出 (抽出率を取る) など, 2 列 + パラメータで
+// 構造化結果を返す関数に用いる.
+
+template <std::size_t NParams,
+          std::string (*Func)(const std::vector<double>&,
+                              const std::vector<double>&,
+                              const std::array<double, NParams>&)>
+class TwoColumnParamAggregateText {
+public:
+    using State = TwoColumnParamState<NParams>;
+
+    static void xStep(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
+        invoke_guarded(ctx, [&] {
+            if (sqlite3_value_type(argv[0]) == SQLITE_NULL ||
+                sqlite3_value_type(argv[1]) == SQLITE_NULL) return;
+            auto* state = getOrCreateState(ctx);
+            if (!state) return;
+            state->xs.push_back(sqlite3_value_double(argv[0]));
+            state->ys.push_back(sqlite3_value_double(argv[1]));
+            if (!state->params_set) {
+                for (std::size_t i = 0; i < NParams; ++i) {
+                    if (static_cast<int>(i + 2) < argc &&
+                        sqlite3_value_type(argv[i + 2]) != SQLITE_NULL) {
+                        state->params[i] = sqlite3_value_double(argv[i + 2]);
+                    }
+                }
+                state->params_set = true;
+            }
+        });
+    }
+
+    static void xFinal(sqlite3_context* ctx) {
+        auto** pp = static_cast<State**>(
+            sqlite3_aggregate_context(ctx, 0));
+        // xFinal の途中で例外が送出されてもステートを解放する
+        AggregateStateGuard<State> state_guard(pp);
+        if (!pp || !*pp || (*pp)->xs.empty()) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+        invoke_guarded(ctx, [&] {
+            std::string result = Func((*pp)->xs, (*pp)->ys, (*pp)->params);
+            if (result.empty()) {
+                sqlite3_result_null(ctx);
+            } else {
+                sqlite3_result_text(ctx, result.c_str(),
+                                    static_cast<int>(result.size()),
+                                    SQLITE_TRANSIENT);
+            }
+        });
+    }
+
+    // 2 引数から 2+NParams 引数までのすべての形式を登録する.
+    // 省略されたパラメータは xStep が既定値のまま残すため, 末尾から順に
+    // 省略できる (例: NParams=2 なら 2, 3, 4 引数のいずれでも呼べる).
+    static int register_func(sqlite3* db, const char* name) {
+        int rc = SQLITE_OK;
+        for (std::size_t n = 0; n <= NParams; ++n) {
+            rc |= sqlite3_create_function_v2(
+                db, name, 2 + static_cast<int>(n),
+                SQLITE_UTF8 | SQLITE_DETERMINISTIC,
+                nullptr, nullptr, xStep, xFinal, nullptr);
+        }
+        return rc;
+    }
+
+private:
+    static State* getOrCreateState(sqlite3_context* ctx) {
+        auto** pp = static_cast<State**>(
+            sqlite3_aggregate_context(ctx, sizeof(State*)));
+        if (!pp) return nullptr;
+        if (!*pp) {
+            *pp = new (std::nothrow) State();
+            if (!*pp) {
+                sqlite3_result_error_nomem(ctx);
+                return nullptr;
+            }
+        }
+        return *pp;
+    }
+
+};
+
 // ===========================================================================
 // Template D — Window Functions
 //
@@ -1908,17 +1994,49 @@ static std::string calc_mann_whitney(const std::vector<double>& x,
     return json_test_result(r);
 }
 
-// --- P5-13: stat_anova1 (two-column: value, group → JSON) ---
-static std::string calc_anova1(const std::vector<double>& values,
-                                const std::vector<double>& groups) {
-    // Split values by group
+// ===========================================================================
+// 群列パターン共通処理
+//
+// 「値列 + 群列」の 2 列を受け取り, statcpp が要求する
+// std::vector<std::vector<double>> へ変換する. 群は群列の値で昇順に並ぶ
+// (std::map の順序) ため, 群番号は SQL 側の値の昇順と一致する.
+// ===========================================================================
+
+/**
+ * @brief 値列を群列で分割する
+ * @param values 値の列
+ * @param groups 群を識別する列(値は任意, 昇順に群番号が振られる)
+ * @return 群ごとの値の配列. 群が 2 つ未満の場合は空を返す
+ */
+static std::vector<std::vector<double>> split_by_group(
+    const std::vector<double>& values,
+    const std::vector<double>& groups) {
     std::map<double, std::vector<double>> grouped;
     for (std::size_t i = 0; i < values.size(); ++i) {
         grouped[groups[i]].push_back(values[i]);
     }
     std::vector<std::vector<double>> group_vecs;
-    for (auto& p : grouped) group_vecs.push_back(std::move(p.second));
-    if (group_vecs.size() < 2) return "";
+    group_vecs.reserve(grouped.size());
+    for (auto& g : grouped) group_vecs.push_back(std::move(g.second));
+    // 検定・分散分析はいずれも 2 群以上を必要とする
+    if (group_vecs.size() < 2) return {};
+    return group_vecs;
+}
+
+/**
+ * @brief オプションの alpha を検証し, 未指定なら既定値 0.05 を返す
+ * @param raw SQL から渡された値(2 引数形式で呼ばれた場合は 0.0)
+ * @return (0, 1) の範囲にあればその値, さもなくば 0.05
+ */
+static double resolve_alpha(double raw) {
+    return (raw > 0.0 && raw < 1.0) ? raw : 0.05;
+}
+
+// --- P5-13: stat_anova1 (two-column: value, group → JSON) ---
+static std::string calc_anova1(const std::vector<double>& values,
+                                const std::vector<double>& groups) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
     auto r = statcpp::one_way_anova(group_vecs);
     return "{\"f_statistic\":" + json_double(r.between.f_statistic)
          + ",\"p_value\":" + json_double(r.between.p_value)
@@ -1927,6 +2045,143 @@ static std::string calc_anova1(const std::vector<double>& values,
          + ",\"ss_between\":" + json_double(r.between.ss)
          + ",\"ss_within\":" + json_double(r.within.ss)
          + ",\"n_groups\":" + std::to_string(r.n_groups) + "}";
+}
+
+// ===========================================================================
+// 群列パターンの検定・事後検定
+//
+// いずれも「値列 + 群列」を取り, split_by_group() で群に分割してから
+// statcpp に委譲する. stat_anova1 と同じ呼び出し形式である.
+// ===========================================================================
+
+// --- 群間比較の検定 (value, group → JSON) ---
+
+/// @brief Kruskal-Wallis 検定 (一元配置分散分析のノンパラメトリック版)
+static std::string calc_kruskal_wallis(const std::vector<double>& values,
+                                        const std::vector<double>& groups) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    return json_test_result(statcpp::kruskal_wallis_test(group_vecs));
+}
+
+/// @brief Levene 検定 (等分散性. 正規性が疑わしい場合はこちらを使う)
+static std::string calc_levene(const std::vector<double>& values,
+                                const std::vector<double>& groups) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    return json_test_result(statcpp::levene_test(group_vecs));
+}
+
+/// @brief Bartlett 検定 (等分散性. 正規分布を前提とする)
+static std::string calc_bartlett(const std::vector<double>& values,
+                                  const std::vector<double>& groups) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    return json_test_result(statcpp::bartlett_test(group_vecs));
+}
+
+/// @brief Cohen's f (一元配置分散分析の効果量)
+static double calc_cohens_f(const std::vector<double>& values,
+                             const std::vector<double>& groups) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return std::numeric_limits<double>::quiet_NaN();
+    return statcpp::cohens_f(statcpp::one_way_anova(group_vecs));
+}
+
+// --- 事後検定 (value, group [,alpha] → JSON) ---
+
+/**
+ * @brief posthoc_result を JSON へ変換する
+ *
+ * group1 / group2 は群列の値を昇順に並べたときの 0 始まりの添字である.
+ */
+static std::string json_posthoc_result(const statcpp::posthoc_result& r) {
+    std::string out = "{\"method\":\"" + r.method + "\"";
+    out += ",\"alpha\":" + json_double(r.alpha);
+    out += ",\"mse\":" + json_double(r.mse);
+    out += ",\"df_error\":" + json_double(r.df_error);
+    out += ",\"comparisons\":[";
+    for (std::size_t i = 0; i < r.comparisons.size(); ++i) {
+        const auto& c = r.comparisons[i];
+        if (i > 0) out += ",";
+        out += "{\"group1\":" + std::to_string(c.group1)
+             + ",\"group2\":" + std::to_string(c.group2)
+             + ",\"mean_diff\":" + json_double(c.mean_diff)
+             + ",\"se\":" + json_double(c.se)
+             + ",\"statistic\":" + json_double(c.statistic)
+             + ",\"p_value\":" + json_double(c.p_value)
+             + ",\"lower\":" + json_double(c.lower)
+             + ",\"upper\":" + json_double(c.upper)
+             + ",\"significant\":" + (c.significant ? "true" : "false") + "}";
+    }
+    out += "]}";
+    return out;
+}
+
+/// @brief Tukey HSD (全ペア比較. 分散分析の標準的な事後検定)
+static std::string calc_tukey_hsd(const std::vector<double>& values,
+                                   const std::vector<double>& groups,
+                                   const std::array<double, 1>& p) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    auto anova = statcpp::one_way_anova(group_vecs);
+    return json_posthoc_result(
+        statcpp::tukey_hsd(anova, group_vecs, resolve_alpha(p[0])));
+}
+
+/// @brief Bonferroni 事後検定 (全ペア比較. 保守的)
+static std::string calc_bonferroni_posthoc(const std::vector<double>& values,
+                                            const std::vector<double>& groups,
+                                            const std::array<double, 1>& p) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    auto anova = statcpp::one_way_anova(group_vecs);
+    return json_posthoc_result(
+        statcpp::bonferroni_posthoc(anova, resolve_alpha(p[0])));
+}
+
+/// @brief Scheffe 事後検定 (全ペア比較. 最も保守的)
+static std::string calc_scheffe_posthoc(const std::vector<double>& values,
+                                         const std::vector<double>& groups,
+                                         const std::array<double, 1>& p) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    auto anova = statcpp::one_way_anova(group_vecs);
+    return json_posthoc_result(
+        statcpp::scheffe_posthoc(anova, resolve_alpha(p[0])));
+}
+
+/// @brief Dunnett 事後検定 (対照群との比較のみ)
+/// @param p [0]=対照群の添字(既定 0), [1]=alpha(既定 0.05)
+static std::string calc_dunnett_posthoc(const std::vector<double>& values,
+                                         const std::vector<double>& groups,
+                                         const std::array<double, 2>& p) {
+    auto group_vecs = split_by_group(values, groups);
+    if (group_vecs.empty()) return "";
+    auto anova = statcpp::one_way_anova(group_vecs);
+    auto control = static_cast<std::size_t>(p[0] > 0.0 ? p[0] : 0.0);
+    if (control >= group_vecs.size()) return "";
+    return json_posthoc_result(
+        statcpp::dunnett_posthoc(anova, control, resolve_alpha(p[1])));
+}
+
+// --- 層化抽出 (value, group [,ratio] → JSON 配列) ---
+
+/// @brief 層化無作為抽出. 各層から同じ割合で標本を取る
+/// @param p [0]=抽出率 (0,1]. 未指定または範囲外なら 0.5
+static std::string calc_stratified_sample(const std::vector<double>& values,
+                                           const std::vector<double>& groups,
+                                           const std::array<double, 1>& p) {
+    double ratio = (p[0] > 0.0 && p[0] <= 1.0) ? p[0] : 0.5;
+    // statcpp::stratified_sample は (層, データ, 抽出率) を並行配列で受け取る
+    auto sampled = statcpp::stratified_sample(groups, values, ratio);
+    std::string out = "[";
+    for (std::size_t i = 0; i < sampled.size(); ++i) {
+        if (i > 0) out += ",";
+        out += json_double(sampled[i]);
+    }
+    out += "]";
+    return out;
 }
 
 // --- P5-14: stat_contingency_table ---
@@ -3162,6 +3417,21 @@ int sqlite3_ext_funcs_init(sqlite3* db, char** /*pzErrMsg*/,
 
     // ANOVA (two-column: value, group → JSON)
     rc |= TwoColumnAggregateText<calc_anova1>::register_func(db, "stat_anova1");
+
+    // --- 群列パターン: 検定・事後検定 (9 functions) ---
+    rc |= TwoColumnAggregateText<calc_kruskal_wallis>::register_func(db, "stat_kruskal_wallis");
+    rc |= TwoColumnAggregateText<calc_levene>::register_func(db, "stat_levene");
+    rc |= TwoColumnAggregateText<calc_bartlett>::register_func(db, "stat_bartlett");
+    rc |= TwoColumnAggregate<calc_cohens_f>::register_func(db, "stat_cohens_f");
+    rc |= TwoColumnParamAggregateText<1, calc_tukey_hsd>::register_func(db, "stat_tukey_hsd");
+    rc |= TwoColumnParamAggregateText<1, calc_bonferroni_posthoc>::register_func(
+        db, "stat_bonferroni_posthoc");
+    rc |= TwoColumnParamAggregateText<1, calc_scheffe_posthoc>::register_func(
+        db, "stat_scheffe_posthoc");
+    rc |= TwoColumnParamAggregateText<2, calc_dunnett_posthoc>::register_func(
+        db, "stat_dunnett_posthoc");
+    rc |= TwoColumnParamAggregateText<1, calc_stratified_sample>::register_func(
+        db, "stat_stratified_sample");
 
     // Contingency table (two-column → JSON)
     rc |= TwoColumnAggregateText<calc_contingency_table>::register_func(db, "stat_contingency_table");

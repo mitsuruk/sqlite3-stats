@@ -6,6 +6,50 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Nine group-column functions**, taking a value column and a group column in the same form as
+  `stat_anova1`. Groups are numbered 0, 1, 2, … in ascending order of the group column's values.
+  The SQL function count goes from 249 to 258.
+
+  | Function | Description |
+  |---|---|
+  | `stat_kruskal_wallis(val, grp)` | Kruskal-Wallis test |
+  | `stat_levene(val, grp)` | Levene test for homogeneity of variance |
+  | `stat_bartlett(val, grp)` | Bartlett test for homogeneity of variance |
+  | `stat_cohens_f(val, grp)` | Cohen's f, the one-way ANOVA effect size |
+  | `stat_tukey_hsd(val, grp [,alpha])` | Tukey HSD post-hoc, all pairs |
+  | `stat_bonferroni_posthoc(val, grp [,alpha])` | Bonferroni post-hoc, all pairs |
+  | `stat_scheffe_posthoc(val, grp [,alpha])` | Scheffe post-hoc, all pairs |
+  | `stat_dunnett_posthoc(val, grp [,ctrl, alpha])` | Dunnett post-hoc, against a control |
+  | `stat_stratified_sample(val, grp [,ratio])` | Stratified random sample |
+
+  `stat_levene` and `stat_bartlett` close a practical gap: the equal-variance assumption behind
+  `stat_anova1` and `stat_t_test2` could not be checked from SQL at all. Levene uses the
+  median-based Brown-Forsythe form, matching the default of R's `car::leveneTest()`; Bartlett
+  matches R's `bartlett.test()`. `stat_kruskal_wallis` matches R's `kruskal.test()` and
+  `stat_tukey_hsd` matches R's `TukeyHSD()`, though statcpp reports a comparison as
+  group1 - group2 with group1 the lower index, so the mean difference and interval bounds are
+  negated relative to R's "2-1" convention. `stat_dunnett_posthoc` uses a Bonferroni
+  approximation rather than the exact multivariate t distribution.
+
+  The post-hoc functions compute the one-way ANOVA internally, so they are called on the raw
+  value and group columns. Optional parameters may be omitted from the right: `alpha` defaults
+  to 0.05, Dunnett's control group index to 0, and the sampling ratio to 0.5.
+
+  ```sql
+  -- Check the assumption, then run the test, then locate the differences
+  SELECT stat_levene(score, class_id)   AS levene,
+         stat_anova1(score, class_id)   AS anova,
+         stat_tukey_hsd(score, class_id) AS posthoc
+  FROM exam_results;
+  ```
+
+  Implemented with the existing two-column aggregate templates plus one new
+  `TwoColumnParamAggregateText` (two columns and parameters returning JSON), which mirrors the
+  existing `TwoColumnParamAggregate`. The group-splitting code was extracted from `calc_anova1`
+  into a shared `split_by_group()` helper.
+
 ### Fixed
 
 - **`stat_bh_correction` and `stat_holm_correction` returned incorrect adjusted p-values**: both
