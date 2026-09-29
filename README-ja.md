@@ -293,7 +293,7 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 このプロジェクトの開発には以下のツールと AI アシスタントを活用しています:
 
 - **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 ヘッダーオンリー統計ライブラリ（386 関数）
-- **Claude Code for VS Code (Opus 4.5/4.6)** — コード生成、リファクタリング、ドキュメント作成
+- **Claude Code for VS Code (Opus 4.5/4.6)** — 初期のテストコードは Claude が生成しました.　また,ドキュメント,コード内のコメント,変数名の英語も Claude 訂正案を作成しています
 - **OpenAI ChatGPT 5.2** — ドキュメントレビュー
 - **LM Studio google/gemma-2-27b** — ドキュメントレビュー
 

@@ -294,7 +294,7 @@ This project is licensed under the MIT License.
 This project uses the following tools and AI assistants:
 
 - **[statcpp](https://github.com/mitsuruk/statcpp)** — C++17 header-only statistics library (386 functions)
-- **Claude Code for VS Code (Opus 4.5/4.6)** — Code generation, refactoring, documentation
+- **Claude Code for VS Code (Opus 4.5/4.6)** — Claude generated the initial test code. Claude also suggested corrections to the English in the documentation, code comments, and variable names.
 - **OpenAI ChatGPT 5.2** — Documentation review
 - **LM Studio google/gemma-2-27b** — Documentation review
 
