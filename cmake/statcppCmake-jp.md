@@ -5,7 +5,7 @@
 `statcpp.cmake` は statcpp ライブラリの自動ダウンロードと設定を行う CMake 設定ファイルです。
 CMake の `file(DOWNLOAD)` を使用して GitHub からリポジトリアーカイブをダウンロードし、`download/` ディレクトリにキャッシュすることで冗長なダウンロードを回避します。
 
-statcpp はモダンなヘッダーオンリー C++17 統計ライブラリです。31 モジュール・524 の公開関数を提供し、記述統計、仮説検定、回帰分析、分散分析、確率分布、リサンプリング、クラスタリングなどをカバーします。すべての関数は STL スタイルのイテレータベース API とプロジェクションに対応しています。
+statcpp はモダンなヘッダーオンリー C++17 統計ライブラリです。31 モジュール・386 の公開関数(オーバーロードを含めると 538)を提供し、記述統計、仮説検定、回帰分析、分散分析、確率分布、リサンプリング、クラスタリングなどをカバーします。すべての関数は STL スタイルのイテレータベース API とプロジェクションに対応しています。
 
 statcpp はヘッダーオンリーであるため、コンパイルやリンクは不要です。インクルードパスの設定のみが必要です。
 
@@ -14,8 +14,8 @@ statcpp はヘッダーオンリーであるため、コンパイルやリンク
 | 項目 | 詳細 |
 |------|------|
 | インストールディレクトリ | `${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp/statcpp-install` |
-| ダウンロード URL | https://github.com/mitsuruk/statcpp/archive/refs/heads/main.tar.gz |
-| バージョン | 0.1.4 |
+| ダウンロード URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz |
+| バージョン | 0.5.0(タグ `v0.5.0`) |
 | ライセンス | MIT License |
 
 ---
@@ -44,7 +44,7 @@ project/
 │   ├── statcppCmake.md       # 英語版ドキュメント
 │   └── statcppCmake-jp.md    # このドキュメント
 ├── download/statcpp/
-│   ├── statcpp-main.tar.gz   # キャッシュされたアーカイブ
+│   ├── statcpp-v0.5.0.tar.gz # キャッシュされたアーカイブ
 │   └── statcpp-install/      # インストールされたヘッダー
 │       └── include/
 │           └── statcpp/
@@ -86,9 +86,9 @@ make
 ```cmake
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.1.4")
-set(STATCPP_BRANCH "main")
-set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/heads/${STATCPP_BRANCH}.tar.gz")
+set(STATCPP_VERSION "0.5.0")
+set(STATCPP_TAG "v${STATCPP_VERSION}")
+set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 ```
 
 ### 2. キャッシュチェックと条件付きダウンロード
@@ -106,7 +106,7 @@ endif()
 | 条件 | アクション |
 |------|----------|
 | `statcpp-install/include/statcpp/statcpp.hpp` が存在 | すべてスキップ（キャッシュを使用） |
-| `statcpp-main.tar.gz` が存在（インストールなし） | ダウンロードをスキップ、展開してインストール |
+| `statcpp-v0.5.0.tar.gz` が存在（インストールなし） | ダウンロードをスキップ、展開してインストール |
 | 何も存在しない | GitHub からダウンロード、展開してインストール |
 
 ### 3. ダウンロード（必要な場合）
@@ -203,11 +203,11 @@ statcpp はモジュールに分類された 31 のヘッダーファイルで�
 |------|------|
 | ヘッダーオンリー | コンパイルやリンク不要 |
 | C++17 | モダンな C++17 機能を使用 |
-| 524 関数 | 統計手法の包括的なカバレッジ |
+| 386 関数 | 統計手法の包括的なカバレッジ |
 | STL スタイル API | イテレータベースのインターフェース（`begin`、`end`） |
 | プロジェクション対応 | プロジェクションによる構造体メンバーの直接処理 |
-| R 検証済み | R 4.4.2 に対して 167 の数値チェックで検証済み |
-| 758 のユニットテスト | Google Test フレームワークでテスト済み |
+| R 検証済み | R と照合可能な 321 関数すべてを R 4.4.2 で検証済み(欠損値を含む入力も含む) |
+| 974 のユニットテスト | Google Test フレームワークでテスト済み(他に R 照合テスト 187 件) |
 | クロスプラットフォーム | macOS、Linux |
 
 ---
@@ -367,11 +367,26 @@ statcpp::mean(first, last, projection);       // プロジェクション付き
 GitHub に接続できない場合、手動でダウンロードして配置できます：
 
 ```bash
-curl -L -o download/statcpp/statcpp-main.tar.gz \
-    https://github.com/mitsuruk/statcpp/archive/refs/heads/main.tar.gz
+curl -L -o download/statcpp/statcpp-v0.5.0.tar.gz \
+    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz
 ```
 
 その後 `cmake ..` を再実行すると、キャッシュされたアーカイブからインストールされます。
+
+### statcpp のバージョンを上げる
+
+`STATCPP_VERSION` を変えるだけではヘッダーは入れ替わりません。キャッシュの判定は
+`statcpp-install/include/statcpp/statcpp.hpp` の有無しか見ないため、以前のバージョンが使われ続けます。
+キャッシュを削除し、クリーンな状態からビルドしてください:
+
+```bash
+rm -rf download/statcpp
+cmake -S . -B build
+cmake --build build --clean-first
+```
+
+`--clean-first` が必要です。展開したヘッダーはリリース時のタイムスタンプを保持しており、既存のオブジェクトファイルより
+古いため、差分ビルドでは `ext_funcs.cpp` が新しいヘッダーで再コンパイルされません。
 
 ### 最初からリビルド
 

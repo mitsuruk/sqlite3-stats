@@ -9,6 +9,10 @@ Full-scan window functions. Each function returns one value per row. Do not use 
 ## Rolling Statistics
 
 > **Note**: All functions in this category are implemented as **window functions** (full-scan type). Each returns one value per row. Do not use `GROUP BY`.
+>
+> Row i holds the window that ends at row i (the most recent n values). A
+> window that contains a `NULL` row returns `NULL`; the other windows are
+> unaffected.
 
 ### stat_rolling_mean
 
@@ -97,7 +101,13 @@ FROM daily_sales;
 
 ### stat_moving_avg
 
-Computes the **simple moving average** (SMA). Equivalent to `stat_rolling_mean`.
+Computes the **simple moving average** (SMA). Equivalent to
+`stat_rolling_mean`, including for windows that contain `NULL`.
+
+The two differ only after an `Inf` value. `stat_moving_avg` sums each window
+separately, as R's `stats::filter()` does. `stat_rolling_mean` keeps a running
+sum, as R's `zoo::rollmean()` does, so every window after an `Inf` returns
+`NULL`.
 
 **Syntax**: `stat_moving_avg(column, window_size)`
 

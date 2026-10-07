@@ -60,6 +60,9 @@ sqlite3_load_extension(db, "./ext_funcs.dylib",
 - Rows with `NULL` input values are **ignored** (following SQLite3 aggregate function conventions)
 - Returns `NULL` when all rows are `NULL` or the result set is empty
 - Returns `NULL` when the computation results in `NaN` or `Inf`
+- Window functions return one value per row instead: a `NULL` row returns
+  `NULL`, and the rolling functions return `NULL` for a window that contains a
+  `NULL` row (see [Window Functions](ref/window_functions.md))
 
 ```sql
 -- Data with NULL values

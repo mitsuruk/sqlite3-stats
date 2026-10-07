@@ -609,3 +609,71 @@ TEST_F(WindowFunctions, CorrectionAllNullsReturnsNull) {
     ASSERT_EQ(r.size(), 2u);
     for (const auto& v : r) EXPECT_TRUE(std::isnan(v));
 }
+
+// =====================================================================
+// Row alignment and NULL handling (statcpp v0.5.0)
+// ts_data: 10, 20, NULL, 40, 50, 30, 70, NULL, 90, 100 (id 1-10)
+// =====================================================================
+
+/// @brief Run a full-scan window function over ts_data in id order
+static std::vector<double> ts_window(sqlite3* db, const std::string& call) {
+    std::string sql = "SELECT " + call + kFullFrame + " FROM ts_data";
+    return query_doubles(db, sql.c_str());
+}
+
+/// @brief Expect value at row index i, or NULL (NaN) when expected is NaN
+static void expect_rows(const std::vector<double>& actual, const std::vector<double>& expected) {
+    ASSERT_EQ(actual.size(), expected.size());
+    for (std::size_t i = 0; i < expected.size(); ++i) {
+        if (std::isnan(expected[i])) {
+            EXPECT_TRUE(std::isnan(actual[i])) << "row " << i + 1 << " should be NULL, got " << actual[i];
+        } else {
+            EXPECT_NEAR(actual[i], expected[i], 1e-12) << "row " << i + 1;
+        }
+    }
+}
+
+namespace {
+const double kNull = std::numeric_limits<double>::quiet_NaN();
+}  // namespace
+
+/// @brief The rolling family returns the window ending at each row (the most recent n
+///        values); rows with fewer than n values and windows containing NULL return NULL
+TEST_F(WindowFunctions, RollingFamilyTrailingWindow) {
+    const std::vector<double> mask = {kNull, kNull, kNull, kNull, kNull, 0, 0, kNull, kNull, kNull};
+    auto with = [&](double r6, double r7) {
+        std::vector<double> e = mask;
+        e[5] = r6;
+        e[6] = r7;
+        return e;
+    };
+    expect_rows(ts_window(db_, "stat_rolling_mean(val, 3)"), with(40.0, 50.0));
+    expect_rows(ts_window(db_, "stat_rolling_std(val, 3)"), with(10.0, 20.0));
+    expect_rows(ts_window(db_, "stat_rolling_min(val, 3)"), with(30.0, 30.0));
+    expect_rows(ts_window(db_, "stat_rolling_max(val, 3)"), with(50.0, 70.0));
+    expect_rows(ts_window(db_, "stat_rolling_sum(val, 3)"), with(120.0, 150.0));
+}
+
+/// @brief stat_moving_avg equals stat_rolling_mean, also with NULL in the data
+///        (a NULL used to make every later row NULL)
+TEST_F(WindowFunctions, MovingAvgEqualsRollingMean) {
+    expect_rows(ts_window(db_, "stat_moving_avg(val, 3)"), ts_window(db_, "stat_rolling_mean(val, 3)"));
+    expect_rows(ts_window(db_, "stat_moving_avg(val, 3)"),
+                {kNull, kNull, kNull, kNull, kNull, 40.0, 50.0, kNull, kNull, kNull});
+}
+
+/// @brief stat_lag returns the value k rows earlier, as SQL's lag() does
+///        (rows used to return their own value)
+TEST_F(WindowFunctions, LagMatchesSqlLag) {
+    expect_rows(ts_window(db_, "stat_lag(val, 1)"),
+                {kNull, 10.0, 20.0, kNull, 40.0, 50.0, 30.0, 70.0, kNull, 90.0});
+    expect_rows(ts_window(db_, "stat_lag(val, 1)"),
+                query_doubles(db_, "SELECT lag(val, 1) OVER (ORDER BY id) FROM ts_data"));
+}
+
+/// @brief stat_fillna_median fills with the median of the observed values
+///        (observed: 10 20 40 50 30 70 90 100, median 45; v0.4.0 of statcpp filled 40)
+TEST_F(WindowFunctions, FillnaMedianTrueMedian) {
+    expect_rows(ts_window(db_, "stat_fillna_median(val)"),
+                {10.0, 20.0, 45.0, 40.0, 50.0, 30.0, 70.0, 45.0, 90.0, 100.0});
+}

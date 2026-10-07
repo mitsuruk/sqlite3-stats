@@ -5,7 +5,7 @@
 `statcpp.cmake` is a CMake configuration file that automatically downloads and configures the statcpp library.
 It uses CMake's `file(DOWNLOAD)` to download the repository archive from GitHub, with caching in the `download/` directory to avoid redundant downloads.
 
-statcpp is a modern, header-only C++17 statistics library. It provides 524 public functions across 31 modules, covering descriptive statistics, hypothesis testing, regression analysis, ANOVA, probability distributions, resampling, clustering, and more. All functions use an STL-style iterator-based API with projection support.
+statcpp is a modern, header-only C++17 statistics library. It provides 386 public functions (538 including overloads) across 31 modules, covering descriptive statistics, hypothesis testing, regression analysis, ANOVA, probability distributions, resampling, clustering, and more. All functions use an STL-style iterator-based API with projection support.
 
 Since statcpp is header-only, no compilation or linking is required. Only the include path needs to be configured.
 
@@ -14,8 +14,8 @@ Since statcpp is header-only, no compilation or linking is required. Only the in
 | Item | Details |
 |------|---------|
 | Install Directory | `${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp/statcpp-install` |
-| Download URL | https://github.com/mitsuruk/statcpp/archive/refs/heads/main.tar.gz |
-| Version | 0.1.4 |
+| Download URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz |
+| Version | 0.5.0 (tag `v0.5.0`) |
 | License | MIT License |
 
 ---
@@ -44,7 +44,7 @@ project/
 │   ├── statcppCmake.md       # This document
 │   └── statcppCmake-jp.md    # Japanese version
 ├── download/statcpp/
-│   ├── statcpp-main.tar.gz   # Cached archive
+│   ├── statcpp-v0.5.0.tar.gz # Cached archive
 │   └── statcpp-install/      # Installed headers
 │       └── include/
 │           └── statcpp/
@@ -86,9 +86,9 @@ make
 ```cmake
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.1.4")
-set(STATCPP_BRANCH "main")
-set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/heads/${STATCPP_BRANCH}.tar.gz")
+set(STATCPP_VERSION "0.5.0")
+set(STATCPP_TAG "v${STATCPP_VERSION}")
+set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 ```
 
 ### 2. Cache Check and Conditional Download
@@ -106,7 +106,7 @@ The cache logic works as follows:
 | Condition | Action |
 |-----------|--------|
 | `statcpp-install/include/statcpp/statcpp.hpp` exists | Skip everything (use cached) |
-| `statcpp-main.tar.gz` exists (install missing) | Skip download, extract and install |
+| `statcpp-v0.5.0.tar.gz` exists (install missing) | Skip download, extract and install |
 | Nothing exists | Download from GitHub, extract and install |
 
 ### 3. Download (if needed)
@@ -203,11 +203,11 @@ statcpp consists of 31 header files organized into modules:
 |---------|-------------|
 | Header-only | No compilation or linking required |
 | C++17 | Uses modern C++17 features |
-| 524 Functions | Comprehensive coverage of statistical methods |
+| 386 Functions | Comprehensive coverage of statistical methods |
 | STL-style API | Iterator-based interface (`begin`, `end`) |
 | Projection Support | Direct struct member processing via projections |
-| R-verified | 167 numerical checks validated against R 4.4.2 |
-| 758 Unit Tests | Tested with Google Test framework |
+| R-verified | All 321 R-comparable functions checked against R 4.4.2 |
+| 974 Unit Tests | Google Test, plus 187 R verification tests |
 | Cross-platform | macOS, Linux |
 
 ---
@@ -367,11 +367,27 @@ statcpp::mean(first, last, projection);       // With projection
 If GitHub is unreachable, you can manually download and place the archive:
 
 ```bash
-curl -L -o download/statcpp/statcpp-main.tar.gz \
-    https://github.com/mitsuruk/statcpp/archive/refs/heads/main.tar.gz
+curl -L -o download/statcpp/statcpp-v0.5.0.tar.gz \
+    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz
 ```
 
 Then re-run `cmake ..` and the installation will proceed from the cached archive.
+
+### Upgrading statcpp
+
+Changing `STATCPP_VERSION` alone does not replace the headers: the cache check
+only looks for `statcpp-install/include/statcpp/statcpp.hpp`, so the previous
+version stays in use. Delete the cache and rebuild from a clean state:
+
+```bash
+rm -rf download/statcpp
+cmake -S . -B build
+cmake --build build --clean-first
+```
+
+`--clean-first` matters: the extracted headers keep the timestamps of the
+release, which are older than the existing object files, so an incremental
+build would not recompile `ext_funcs.cpp` against the new headers.
 
 ### Rebuild from Scratch
 

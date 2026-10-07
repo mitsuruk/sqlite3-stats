@@ -58,6 +58,8 @@ sqlite3_load_extension(db, "./ext_funcs.dylib",
 - 入力値が `NULL` の行は**無視**される（SQLite3 の集約関数の慣例に準拠）
 - すべての行が `NULL` の場合、または結果セットが空の場合は `NULL` を返す
 - 計算結果が `NaN` または `Inf` になった場合は `NULL` を返す
+- ウィンドウ関数は行ごとに値を返す。`NULL` の行は `NULL` を返し、ローリング系の関数は `NULL` の行を含む窓に対して
+  `NULL` を返す([ウィンドウ関数](ref/window_functions-ja.md) を参照)
 
 ```sql
 -- NULL を含むデータ

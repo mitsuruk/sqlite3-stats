@@ -52,6 +52,18 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **The rolling window functions placed each window on the wrong row**:
+  `stat_rolling_mean`, `stat_rolling_std`, `stat_rolling_min`,
+  `stat_rolling_max`, `stat_rolling_sum` and `stat_moving_avg` returned, on row
+  i, the window that starts at row i, while the documentation promised the most
+  recent n values. Row i now holds the window that ends at row i: the first
+  n - 1 rows return `NULL`, and so does any window that contains a `NULL` row.
+- **`stat_moving_avg` returned `NULL` for every row after a `NULL`**: it is now
+  equivalent to `stat_rolling_mean`, as documented (this relies on statcpp
+  0.5.0, see Dependencies).
+- **`stat_lag` returned each row's own value**: the result of `statcpp::lag` was
+  not shifted, so row i held x[i] and the last k rows were `NULL`. Row i now
+  holds x[i - k] and the first k rows are `NULL`, matching SQL's `lag()`.
 - **`stat_bh_correction` and `stat_holm_correction` returned incorrect adjusted p-values**: both
   reimplemented the correction formula locally instead of delegating to statcpp, and omitted the
   monotonicity step that both procedures require. BH takes a cumulative minimum over p-values in
@@ -119,6 +131,25 @@ This project follows [Semantic Versioning](https://semver.org/).
   output before and after, apart from the functions that draw random numbers.
 
 ### Dependencies
+
+- **statcpp**: v0.4.0 -> v0.5.0, which handles missing values (NaN) as R does
+  throughout. In this library NaN reaches statcpp only in the window functions,
+  where `NULL` rows are passed as NaN; the aggregate and scalar functions skip
+  `NULL` before calling statcpp, and SQLite stores NaN as `NULL`. Of the 26
+  window functions, four change their result, and only for data containing
+  `NULL` or `Inf`:
+  - **`stat_rolling_min()` / `stat_rolling_max()`**: a window containing `NULL`
+    now returns `NULL`. It used to depend on where the `NULL` was in the window.
+  - **`stat_moving_avg()`**: only the windows containing `NULL` or `Inf` are
+    affected. A single `NULL` or `Inf` used to make every later window `NULL`.
+  - **`stat_fillna_median()`**: fills with the median of the observed values. It
+    used to compute the median of the unsorted values, filling
+    `{9, NULL, 1, 5, 3}` with 3 instead of 4.
+
+  All other SQL functions give identical results, checked over the 26 window
+  functions on data with `NULL` and `Inf` and over the 266 integration examples.
+  No source change was needed for the upgrade itself. Google Test: 428 cases,
+  including four new ones for the changes above.
 
 - **statcpp**: v0.3.0 -> v0.4.0. The upgrade changes the value returned by four SQL functions;
   no source change was needed in this library. All 388 Google Test cases and all 266 integration

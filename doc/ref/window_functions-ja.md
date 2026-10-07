@@ -9,6 +9,8 @@
 ## ローリング統計量
 
 > **注意**: 本カテゴリの関数はすべて**ウィンドウ関数**（全行スキャン型）として実装されている。各行に対して1つの値を返す。`GROUP BY` は使用しない。
+>
+> 行 i にはその行で終わる窓(直近 n 件)の値が入る。`NULL` の行を含む窓は `NULL` を返し、他の窓には影響しない。
 
 ### stat_rolling_mean
 
@@ -97,7 +99,9 @@ FROM daily_sales;
 
 ### stat_moving_avg
 
-**単純移動平均** (SMA) を計算する。`stat_rolling_mean` と同等。
+**単純移動平均** (SMA) を計算する。`NULL` を含む窓も含めて `stat_rolling_mean` と同等。
+異なるのは `Inf` の後だけで、`stat_moving_avg` は R の `stats::filter()` と同じく窓ごとに合計するのに対し、
+`stat_rolling_mean` は R の `zoo::rollmean()` と同じく累積和を使うため、`Inf` 以降の窓はすべて `NULL` を返す。
 
 **構文**: `stat_moving_avg(column, window_size)`
 

@@ -1301,17 +1301,39 @@ static std::vector<double> extract_valid(const std::vector<double>& values,
 
 // --- Rolling functions ---
 
+/**
+ * @brief Place window results on the row where each window ends
+ *
+ * statcpp's rolling functions return n - w + 1 values, element k being the window over
+ * rows k .. k + w - 1. Row i of the SQL result is the window ending at row i (the most
+ * recent w values), so it takes element i - w + 1. Rows with fewer than w values and
+ * windows containing a NULL row return NULL.
+ *
+ * @param windowed Results from statcpp, one per complete window
+ * @param window Window size w
+ * @param nulls Whether each input row was NULL
+ * @return One value per row, NaN (returned as NULL) where no result applies
+ */
+static std::vector<double> align_trailing(const std::vector<double>& windowed, std::size_t window,
+                                          const std::vector<bool>& nulls) {
+    std::vector<double> out(nulls.size(), std::numeric_limits<double>::quiet_NaN());
+    std::size_t nulls_in_window = 0;  // NULL rows among i - w + 1 .. i
+    for (std::size_t i = 0; i < out.size(); ++i) {
+        if (nulls[i]) ++nulls_in_window;
+        if (i >= window && nulls[i - window]) --nulls_in_window;
+        if (i + 1 < window || nulls_in_window > 0) continue;
+        const std::size_t k = i + 1 - window;  // index of the window ending at row i
+        if (k < windowed.size()) out[i] = windowed[k];
+    }
+    return out;
+}
+
 static std::vector<double> wf_rolling_mean(const std::vector<double>& values,
                                             const std::vector<bool>& nulls,
                                             int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::rolling_mean(values, w);
-    // Mark rows with NULL input as NaN in result
-    for (std::size_t i = 0; i < result.size() && i < nulls.size(); ++i) {
-        if (nulls[i]) result[i] = std::numeric_limits<double>::quiet_NaN();
-    }
-    return result;
+    return align_trailing(statcpp::rolling_mean(values, w), w, nulls);
 }
 
 static std::vector<double> wf_rolling_std(const std::vector<double>& values,
@@ -1319,11 +1341,7 @@ static std::vector<double> wf_rolling_std(const std::vector<double>& values,
                                            int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::rolling_std(values, w);
-    for (std::size_t i = 0; i < result.size() && i < nulls.size(); ++i) {
-        if (nulls[i]) result[i] = std::numeric_limits<double>::quiet_NaN();
-    }
-    return result;
+    return align_trailing(statcpp::rolling_std(values, w), w, nulls);
 }
 
 static std::vector<double> wf_rolling_min(const std::vector<double>& values,
@@ -1331,11 +1349,7 @@ static std::vector<double> wf_rolling_min(const std::vector<double>& values,
                                            int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::rolling_min(values, w);
-    for (std::size_t i = 0; i < result.size() && i < nulls.size(); ++i) {
-        if (nulls[i]) result[i] = std::numeric_limits<double>::quiet_NaN();
-    }
-    return result;
+    return align_trailing(statcpp::rolling_min(values, w), w, nulls);
 }
 
 static std::vector<double> wf_rolling_max(const std::vector<double>& values,
@@ -1343,11 +1357,7 @@ static std::vector<double> wf_rolling_max(const std::vector<double>& values,
                                            int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::rolling_max(values, w);
-    for (std::size_t i = 0; i < result.size() && i < nulls.size(); ++i) {
-        if (nulls[i]) result[i] = std::numeric_limits<double>::quiet_NaN();
-    }
-    return result;
+    return align_trailing(statcpp::rolling_max(values, w), w, nulls);
 }
 
 static std::vector<double> wf_rolling_sum(const std::vector<double>& values,
@@ -1355,20 +1365,17 @@ static std::vector<double> wf_rolling_sum(const std::vector<double>& values,
                                            int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::rolling_sum(values, w);
-    for (std::size_t i = 0; i < result.size() && i < nulls.size(); ++i) {
-        if (nulls[i]) result[i] = std::numeric_limits<double>::quiet_NaN();
-    }
-    return result;
+    return align_trailing(statcpp::rolling_sum(values, w), w, nulls);
 }
 
+// Documented as equivalent to stat_rolling_mean. statcpp 0.5.0 computes a window that
+// contains NaN per window, so a NULL no longer turns every later row NULL.
 static std::vector<double> wf_moving_avg(const std::vector<double>& values,
-                                          const std::vector<bool>& /*nulls*/,
+                                          const std::vector<bool>& nulls,
                                           int window) {
     if (window <= 0) window = 1;
     auto w = static_cast<std::size_t>(window);
-    auto result = statcpp::moving_average(values.begin(), values.end(), w);
-    return result;
+    return align_trailing(statcpp::moving_average(values.begin(), values.end(), w), w, nulls);
 }
 
 static std::vector<double> wf_ema(const std::vector<double>& values,
@@ -1557,7 +1564,13 @@ static std::vector<double> wf_lag(const std::vector<double>& values,
     if (k <= 0) k = 1;
     auto result = statcpp::lag(values.begin(), values.end(),
                                 static_cast<std::size_t>(k));
-    return result;
+    // lag returns n - k elements (x[0] .. x[n-k-1]); pad the front with NaN so that row i
+    // holds x[i - k], as SQL's lag() does
+    std::vector<double> padded(values.size(), std::numeric_limits<double>::quiet_NaN());
+    for (std::size_t i = 0; i < result.size(); ++i) {
+        padded[i + static_cast<std::size_t>(k)] = result[i];
+    }
+    return padded;
 }
 
 // --- Outlier detection ---
