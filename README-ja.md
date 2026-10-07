@@ -8,7 +8,7 @@ SQLite3 に **258 個の統計関数** を追加するロード可能な拡張�
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
-[![Google Test](https://img.shields.io/badge/Google%20Test-434%20passed-brightgreen.svg)](https://github.com/google/googletest)
+[![Google Test](https://img.shields.io/badge/Google%20Test-440%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [English](README.md)
 
@@ -16,7 +16,7 @@ SQLite3 に **258 個の統計関数** を追加するロード可能な拡張�
 
 sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 258 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（386 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
 
-全 258 関数は 266 件の結合テストおよび 434 件の Google Test 自動テストで検証済みです。
+全 258 関数は 266 件の結合テストおよび 440 件の Google Test 自動テストで検証済みです。
 
 ### 主な特徴
 
@@ -111,14 +111,14 @@ ctest --test-dir build --output-on-failure
 
 | テストファイル | 関数数 | テスト数 |
 |---|---|---|
-| basic_aggregates_test.cpp | 24 | 61 |
+| basic_aggregates_test.cpp | 24 | 62 |
 | parameterized_aggregates_test.cpp | 20 | 51 |
-| two_column_aggregates_test.cpp | 27 | 56 |
-| window_functions_test.cpp | 26 | 51 |
+| two_column_aggregates_test.cpp | 27 | 57 |
+| window_functions_test.cpp | 26 | 55 |
 | complex_aggregates_test.cpp | 41 | 80 |
 | scalar_tests_helpers_test.cpp | 38 | 43 |
 | scalar_distributions_test.cpp | 83 | 92 |
-| **合計** | **258** | **434** |
+| **合計** | **258** | **440** |
 
 `stat_bonferroni` はウィンドウ関数形式とスカラー形式の両方を持つため両カテゴリ
 に計上しており、関数数の列は 258 個の名前に対して 259 件になる。

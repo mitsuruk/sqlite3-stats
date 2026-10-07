@@ -108,18 +108,12 @@ TEST_F(BasicAggregates, GeometricMeanEmpty) {
         query_is_null(db_, "SELECT stat_geometric_mean(val) FROM empty_data"));
 }
 
-/// @brief Negative value -> NULL
-/// @brief Negative values: statcpp may throw instead
+/// @brief Negative value -> SQL error carrying statcpp's message
+///        (statcpp throws; the exception guard turns it into an SQL error)
 TEST_F(BasicAggregates, GeometricMeanNegative) {
-    try {
-        auto is_null = query_is_null(
-            db_,
-            "SELECT stat_geometric_mean(val) FROM (SELECT -1.0 AS val)");
-        EXPECT_TRUE(is_null);
-    } catch (const std::exception&) {
-        // Accept the case where statcpp throws
-        SUCCEED();
-    }
+    std::string msg = query_error(
+        db_, "SELECT stat_geometric_mean(val) FROM (SELECT -1.0 AS val)");
+    EXPECT_NE(msg.find("all values must be positive"), std::string::npos) << msg;
 }
 
 // =====================================================================
@@ -139,18 +133,13 @@ TEST_F(BasicAggregates, HarmonicMeanEmpty) {
         query_is_null(db_, "SELECT stat_harmonic_mean(val) FROM empty_data"));
 }
 
-/// @brief Contains zero -> NULL
-/// @brief Contains zero: statcpp may throw instead
+/// @brief Contains zero -> SQL error carrying statcpp's message
 TEST_F(BasicAggregates, HarmonicMeanWithZero) {
-    try {
-        auto is_null = query_is_null(
-            db_,
-            "SELECT stat_harmonic_mean(val) FROM ("
-            "SELECT 0.0 AS val UNION ALL SELECT 1.0)");
-        EXPECT_TRUE(is_null);
-    } catch (const std::exception&) {
-        SUCCEED();
-    }
+    std::string msg = query_error(
+        db_,
+        "SELECT stat_harmonic_mean(val) FROM ("
+        "SELECT 0.0 AS val UNION ALL SELECT 1.0)");
+    EXPECT_NE(msg.find("zero or near-zero value"), std::string::npos) << msg;
 }
 
 // =====================================================================
@@ -510,4 +499,17 @@ TEST_F(BasicAggregates, HodgesLehmannNormal) {
 TEST_F(BasicAggregates, HodgesLehmannEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_hodges_lehmann(val) FROM empty_data"));
+}
+
+// =====================================================================
+// Inf in the data (doc/nan_notes.md section 2)
+// =====================================================================
+
+/// @brief A NaN or Inf result is returned as NULL; a finite result is unaffected
+TEST_F(BasicAggregates, InfResultReturnsNull) {
+    const char* inf_rows = "(SELECT 1.0 AS val UNION ALL SELECT 2.0 UNION ALL SELECT 9e999)";
+    EXPECT_TRUE(query_returns_null(db_, (std::string("SELECT stat_mean(val) FROM ") + inf_rows).c_str()));
+    EXPECT_TRUE(query_returns_null(db_, (std::string("SELECT stat_range(val) FROM ") + inf_rows).c_str()));
+    EXPECT_TRUE(query_returns_null(db_, (std::string("SELECT stat_stdev(val) FROM ") + inf_rows).c_str()));
+    EXPECT_NEAR(query_double(db_, (std::string("SELECT stat_median(val) FROM ") + inf_rows).c_str()), 2.0, 1e-12);
 }

@@ -555,3 +555,22 @@ TEST_F(TwoColumnAggregates, ChebyshevDistEmpty) {
     EXPECT_TRUE(query_is_null(
         db_, "SELECT stat_chebyshev_dist(val, val) FROM empty_data"));
 }
+
+// =====================================================================
+// NULL rows (doc/nan_notes.md section 2)
+// =====================================================================
+
+/// @brief A row in which either column is NULL is skipped (complete cases):
+///        the result equals the one computed on (1,2), (3,5), (4,8), (5,9)
+TEST_F(TwoColumnAggregates, NullRowsSkippedPairwise) {
+    exec_sql(db_, "CREATE TABLE xyn (x REAL, y REAL)");
+    exec_sql(db_, "INSERT INTO xyn VALUES (1,2),(2,NULL),(3,5),(NULL,6),(4,8),(5,9)");
+    exec_sql(db_, "CREATE TABLE xyc (x REAL, y REAL)");
+    exec_sql(db_, "INSERT INTO xyc VALUES (1,2),(3,5),(4,8),(5,9)");
+    for (const char* fn : {"stat_pearson_r", "stat_covariance", "stat_spearman_r"}) {
+        std::string with_null = std::string("SELECT ") + fn + "(x, y) FROM xyn";
+        std::string complete = std::string("SELECT ") + fn + "(x, y) FROM xyc";
+        EXPECT_DOUBLE_EQ(query_double(db_, with_null.c_str()), query_double(db_, complete.c_str())) << fn;
+    }
+    EXPECT_NEAR(query_double(db_, "SELECT stat_pearson_r(x, y) FROM xyn"), 0.98754143975738828, 1e-12);
+}

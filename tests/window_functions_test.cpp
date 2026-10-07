@@ -690,3 +690,68 @@ TEST_F(WindowFunctions, NullParameterReturnsNullRows) {
         }
     }
 }
+
+// =====================================================================
+// NULL and Inf by kind of window function (doc/nan_notes.md section 5)
+// =====================================================================
+
+/// @brief Run a full-scan window function over any table with columns id and val
+static std::vector<double> window_rows(sqlite3* db, const std::string& call, const std::string& table) {
+    std::string sql = "SELECT " + call + kFullFrame + " FROM " + table;
+    return query_doubles(db, sql.c_str());
+}
+
+/// @brief Cumulative: stat_ema carries its state, so every row after the first NULL is NULL
+TEST_F(WindowFunctions, EmaNullPropagatesToLaterRows) {
+    // span 3 -> alpha 0.5: 10, 0.5 * 20 + 0.5 * 10 = 15, then NULL from row 3 on
+    expect_rows(ts_window(db_, "stat_ema(val, 3)"),
+                {10.0, 15.0, kNull, kNull, kNull, kNull, kNull, kNull, kNull, kNull});
+}
+
+/// @brief Per row: the statistic comes from the non-NULL rows and the NULL rows stay NULL
+TEST_F(WindowFunctions, PerRowFunctionsKeepNullRows) {
+    // ranks of 10 20 40 50 30 70 90 100 among the eight observed values
+    expect_rows(ts_window(db_, "stat_rank(val)"),
+                {1.0, 2.0, kNull, 4.0, 5.0, 3.0, 6.0, kNull, 7.0, 8.0});
+    for (const char* call : {"stat_label_encode(val)", "stat_bin_width(val, 3)", "stat_bin_freq(val, 3)",
+                             "stat_outliers_iqr(val)", "stat_outliers_zscore(val)", "stat_outliers_mzscore(val)",
+                             "stat_winsorize(val, 0.1)"}) {
+        auto rows = ts_window(db_, call);
+        ASSERT_EQ(rows.size(), 10u) << call;
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            const bool null_row = (i == 2 || i == 7);  // ids 3 and 8
+            EXPECT_EQ(std::isnan(rows[i]), null_row) << call << " row " << i + 1;
+        }
+    }
+}
+
+/// @brief Imputation: a NULL at the start (ffill, interp) or the end (bfill, interp) stays NULL
+TEST_F(WindowFunctions, FillnaEdgesStayNull) {
+    exec_sql(db_, "CREATE TABLE edges (id INTEGER PRIMARY KEY, val REAL)");
+    exec_sql(db_, "INSERT INTO edges VALUES (1,NULL),(2,20),(3,NULL),(4,40),(5,NULL)");
+    expect_rows(window_rows(db_, "stat_fillna_ffill(val)", "edges"), {kNull, 20.0, 20.0, 40.0, 40.0});
+    expect_rows(window_rows(db_, "stat_fillna_bfill(val)", "edges"), {20.0, 20.0, 40.0, 40.0, kNull});
+    expect_rows(window_rows(db_, "stat_fillna_interp(val)", "edges"), {kNull, 20.0, 30.0, 40.0, kNull});
+    expect_rows(window_rows(db_, "stat_fillna_mean(val)", "edges"), {30.0, 20.0, 30.0, 40.0, 30.0});
+}
+
+/// @brief Inf in a rolling window is returned as Inf (only NaN becomes NULL).
+///        stat_rolling_mean keeps a running sum, so the window after the Inf is NULL
+///        (as R's zoo::rollmean); stat_moving_avg sums each window (as R's stats::filter)
+TEST_F(WindowFunctions, InfInRollingWindows) {
+    exec_sql(db_, "CREATE TABLE infs (id INTEGER PRIMARY KEY, val REAL)");
+    exec_sql(db_, "INSERT INTO infs VALUES (1,1),(2,9e999),(3,2),(4,3)");
+    const double inf = std::numeric_limits<double>::infinity();
+    auto rm = window_rows(db_, "stat_rolling_mean(val, 2)", "infs");
+    auto ma = window_rows(db_, "stat_moving_avg(val, 2)", "infs");
+    ASSERT_EQ(rm.size(), 4u);
+    ASSERT_EQ(ma.size(), 4u);
+    EXPECT_TRUE(std::isnan(rm[0]));
+    EXPECT_EQ(rm[1], inf);
+    EXPECT_EQ(rm[2], inf);
+    EXPECT_TRUE(std::isnan(rm[3]));
+    EXPECT_TRUE(std::isnan(ma[0]));
+    EXPECT_EQ(ma[1], inf);
+    EXPECT_EQ(ma[2], inf);
+    EXPECT_DOUBLE_EQ(ma[3], 2.5);
+}
