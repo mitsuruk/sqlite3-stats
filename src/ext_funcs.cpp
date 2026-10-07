@@ -305,6 +305,7 @@ struct SingleColumnParamState {
     std::vector<double> values;
     std::array<double, NParams> params{};
     bool params_set = false;
+    bool param_null = false;  // a parameter was NULL: the result is NULL (SQL convention)
 };
 
 // --- B1: returns double ---
@@ -324,8 +325,10 @@ public:
             state->values.push_back(sqlite3_value_double(argv[0]));
             if (!state->params_set) {
                 for (std::size_t i = 0; i < NParams; ++i) {
-                    if (static_cast<int>(i + 1) < argc &&
-                        sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
+                    if (static_cast<int>(i + 1) >= argc) continue;  // omitted: keep the default
+                    if (sqlite3_value_type(argv[i + 1]) == SQLITE_NULL) {
+                        state->param_null = true;
+                    } else {
                         state->params[i] = sqlite3_value_double(argv[i + 1]);
                     }
                 }
@@ -340,6 +343,10 @@ public:
         // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+        if ((*pp)->param_null) {
             sqlite3_result_null(ctx);
             return;
         }
@@ -394,8 +401,10 @@ public:
             state->values.push_back(sqlite3_value_double(argv[0]));
             if (!state->params_set) {
                 for (std::size_t i = 0; i < NParams; ++i) {
-                    if (static_cast<int>(i + 1) < argc &&
-                        sqlite3_value_type(argv[i + 1]) != SQLITE_NULL) {
+                    if (static_cast<int>(i + 1) >= argc) continue;  // omitted: keep the default
+                    if (sqlite3_value_type(argv[i + 1]) == SQLITE_NULL) {
+                        state->param_null = true;
+                    } else {
                         state->params[i] = sqlite3_value_double(argv[i + 1]);
                     }
                 }
@@ -410,6 +419,10 @@ public:
         // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->values.empty()) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+        if ((*pp)->param_null) {
             sqlite3_result_null(ctx);
             return;
         }
@@ -784,6 +797,7 @@ struct TwoColumnParamState {
     std::vector<double> ys;
     std::array<double, NParams> params{};
     bool params_set = false;
+    bool param_null = false;  // a parameter was NULL: the result is NULL (SQL convention)
 };
 
 template <std::size_t NParams,
@@ -804,8 +818,10 @@ public:
             state->ys.push_back(sqlite3_value_double(argv[1]));
             if (!state->params_set) {
                 for (std::size_t i = 0; i < NParams; ++i) {
-                    if (static_cast<int>(i + 2) < argc &&
-                        sqlite3_value_type(argv[i + 2]) != SQLITE_NULL) {
+                    if (static_cast<int>(i + 2) >= argc) continue;  // omitted: keep the default
+                    if (sqlite3_value_type(argv[i + 2]) == SQLITE_NULL) {
+                        state->param_null = true;
+                    } else {
                         state->params[i] = sqlite3_value_double(argv[i + 2]);
                     }
                 }
@@ -820,6 +836,10 @@ public:
         // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+        if ((*pp)->param_null) {
             sqlite3_result_null(ctx);
             return;
         }
@@ -881,8 +901,10 @@ public:
             state->ys.push_back(sqlite3_value_double(argv[1]));
             if (!state->params_set) {
                 for (std::size_t i = 0; i < NParams; ++i) {
-                    if (static_cast<int>(i + 2) < argc &&
-                        sqlite3_value_type(argv[i + 2]) != SQLITE_NULL) {
+                    if (static_cast<int>(i + 2) >= argc) continue;  // omitted: keep the default
+                    if (sqlite3_value_type(argv[i + 2]) == SQLITE_NULL) {
+                        state->param_null = true;
+                    } else {
                         state->params[i] = sqlite3_value_double(argv[i + 2]);
                     }
                 }
@@ -897,6 +919,10 @@ public:
         // Release the state even if xFinal throws part way through
         AggregateStateGuard<State> state_guard(pp);
         if (!pp || !*pp || (*pp)->xs.empty()) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+        if ((*pp)->param_null) {
             sqlite3_result_null(ctx);
             return;
         }
@@ -966,6 +992,7 @@ struct WindowState {
     int param = 0;
     double dparam = 0.0;
     bool param_set = false;
+    bool param_null = false;  // the parameter was NULL: every row is NULL (as SQL's lag(v, NULL))
     std::size_t result_idx = 0;
     bool computed = false;
 };
@@ -985,8 +1012,9 @@ public:
             state->nulls.push_back(is_null);
             state->values.push_back(is_null ? std::numeric_limits<double>::quiet_NaN()
                                             : sqlite3_value_double(argv[0]));
-            if (!state->param_set && argc > 1 &&
-                sqlite3_value_type(argv[1]) != SQLITE_NULL) {
+            if (argc > 1 && sqlite3_value_type(argv[1]) == SQLITE_NULL) {
+                state->param_null = true;
+            } else if (!state->param_set && argc > 1) {
                 state->param = sqlite3_value_int(argv[1]);
                 state->dparam = sqlite3_value_double(argv[1]);
                 state->param_set = true;
@@ -1003,7 +1031,9 @@ public:
         if (!state) { sqlite3_result_null(ctx); return; }
         invoke_guarded(ctx, [&] {
             if (!state->computed) {
-                state->results = Func(state->values, state->nulls, state->param);
+                state->results = state->param_null
+                    ? std::vector<double>(state->values.size(), std::numeric_limits<double>::quiet_NaN())
+                    : Func(state->values, state->nulls, state->param);
                 state->computed = true;
                 state->result_idx = 0;
             }
@@ -1032,7 +1062,9 @@ public:
         }
         invoke_guarded(ctx, [&] {
             if (!(*pp)->computed) {
-                (*pp)->results = Func((*pp)->values, (*pp)->nulls, (*pp)->param);
+                (*pp)->results = (*pp)->param_null
+                    ? std::vector<double>((*pp)->values.size(), std::numeric_limits<double>::quiet_NaN())
+                    : Func((*pp)->values, (*pp)->nulls, (*pp)->param);
                 (*pp)->computed = true;
             }
             if ((*pp)->result_idx < (*pp)->results.size()) {
@@ -1778,6 +1810,14 @@ private:
  */
 template <void (*Fn)(sqlite3_context*, int, sqlite3_value**)>
 static void guarded_scalar(sqlite3_context* ctx, int argc, sqlite3_value** argv) {
+    // SQL convention: a NULL argument gives NULL, as SQLite's built-in functions do.
+    // Without this, sqlite3_value_double() would read NULL as 0.
+    for (int i = 0; i < argc; ++i) {
+        if (sqlite3_value_type(argv[i]) == SQLITE_NULL) {
+            sqlite3_result_null(ctx);
+            return;
+        }
+    }
     invoke_guarded(ctx, [&] { Fn(ctx, argc, argv); });
 }
 

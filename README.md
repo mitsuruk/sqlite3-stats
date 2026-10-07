@@ -8,7 +8,7 @@ A loadable extension that adds **258 statistical functions** to SQLite3.
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
-[![Google Test](https://img.shields.io/badge/Google%20Test-428%20passed-brightgreen.svg)](https://github.com/google/googletest)
+[![Google Test](https://img.shields.io/badge/Google%20Test-434%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [日本語](README-ja.md)
 
@@ -16,7 +16,7 @@ A loadable extension that adds **258 statistical functions** to SQLite3.
 
 sqlite3-stats (formerly sqlite3StatisticalLibrary) is a SQLite3 loadable extension that provides 258 statistical functions callable directly from SQL. Built on [statcpp](https://github.com/mitsuruk/statcpp) (a C++17 header-only statistics library with 386 functions), this extension exposes a curated subset of statistical capabilities as native SQL functions.
 
-All 258 functions are verified by 266 integration tests and 428 Google Test automated tests.
+All 258 functions are verified by 266 integration tests and 434 Google Test automated tests.
 
 ### Key Features
 
@@ -112,13 +112,13 @@ ctest --test-dir build --output-on-failure
 | Test file | Functions | Tests |
 |---|---|---|
 | basic_aggregates_test.cpp | 24 | 61 |
-| parameterized_aggregates_test.cpp | 20 | 49 |
+| parameterized_aggregates_test.cpp | 20 | 51 |
 | two_column_aggregates_test.cpp | 27 | 56 |
-| window_functions_test.cpp | 26 | 50 |
+| window_functions_test.cpp | 26 | 51 |
 | complex_aggregates_test.cpp | 41 | 80 |
-| scalar_tests_helpers_test.cpp | 38 | 42 |
-| scalar_distributions_test.cpp | 83 | 90 |
-| **Total** | **258** | **428** |
+| scalar_tests_helpers_test.cpp | 38 | 43 |
+| scalar_distributions_test.cpp | 83 | 92 |
+| **Total** | **258** | **434** |
 
 `stat_bonferroni` is counted under both window functions and scalar test
 helpers, since it has a form of each, so the function column lists 259 entries
@@ -204,6 +204,7 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- effect size=0.5, alpha=0.05, power=0.80
 Full documentation for all 258 functions:
 
 - [Function Reference (hub)](doc/function_reference.md)
+  - [NULL, NaN and Inf Notes](doc/nan_notes.md)
   - [Basic Aggregates (24)](doc/ref/basic_aggregates.md)
   - [Parameterized Aggregates (20)](doc/ref/parameterized_aggregates.md)
   - [Two-Column Aggregates (27)](doc/ref/two_column_aggregates.md)
@@ -235,6 +236,8 @@ sqlite3-stats/
 ├── doc/
 │   ├── function_reference.md              # Function reference hub (English)
 │   ├── function_reference-ja.md           # Function reference hub (Japanese)
+│   ├── nan_notes.md                       # NULL, NaN and Inf notes (English)
+│   ├── nan_notes-ja.md                    # NULL, NaN and Inf notes (Japanese)
 │   ├── sqlite3lib_LOAD_EXTENSION.md       # Extension implementation guide (English)
 │   ├── sqlite3lib_LOAD_EXTENSION-ja.md    # Extension implementation guide (Japanese)
 │   └── ref/                               # Per-category function details

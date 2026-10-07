@@ -63,6 +63,9 @@ sqlite3_load_extension(db, "./ext_funcs.dylib",
 - Window functions return one value per row instead: a `NULL` row returns
   `NULL`, and the rolling functions return `NULL` for a window that contains a
   `NULL` row (see [Window Functions](ref/window_functions.md))
+- A `NULL` parameter or scalar-function argument gives `NULL`, as in SQL;
+  omit an optional parameter to use its default. See
+  [NULL, NaN and Inf Notes](nan_notes.md) for this and other cases
 
 ```sql
 -- Data with NULL values

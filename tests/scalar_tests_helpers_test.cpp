@@ -362,3 +362,17 @@ TEST_F(ScalarTestsHelpers, BoxCoxLambda2) {
     double result = query_double(db_, "SELECT stat_boxcox(2.0, 2.0)");
     EXPECT_NEAR(result, 1.5, 1e-4);
 }
+
+// =====================================================================
+// NULL arguments (SQL convention: a NULL argument gives NULL)
+// =====================================================================
+
+/// @brief Any NULL argument returns NULL instead of being read as 0
+TEST_F(ScalarTestsHelpers, NullArgumentReturnsNull) {
+    for (const char* sql : {
+             "SELECT stat_n_moe_mean(NULL, 5.0)",
+             "SELECT stat_n_moe_mean(1.0, NULL)",
+         }) {
+        EXPECT_TRUE(query_returns_null(db_, sql)) << sql;
+    }
+}

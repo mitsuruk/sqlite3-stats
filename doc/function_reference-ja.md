@@ -60,6 +60,8 @@ sqlite3_load_extension(db, "./ext_funcs.dylib",
 - 計算結果が `NaN` または `Inf` になった場合は `NULL` を返す
 - ウィンドウ関数は行ごとに値を返す。`NULL` の行は `NULL` を返し、ローリング系の関数は `NULL` の行を含む窓に対して
   `NULL` を返す([ウィンドウ関数](ref/window_functions-ja.md) を参照)
+- SQL と同じく、パラメータやスカラー関数の引数に `NULL` を渡すと `NULL` を返す。省略可能なパラメータの既定値を使うには省略する。
+  これを含む注意事項は [NULL・NaN・Inf の注意事項](nan_notes-ja.md) を参照
 
 ```sql
 -- NULL を含むデータ

@@ -50,6 +50,19 @@ This project follows [Semantic Versioning](https://semver.org/).
   existing `TwoColumnParamAggregate`. The group-splitting code was extracted from `calc_anova1`
   into a shared `split_by_group()` helper.
 
+### Changed
+
+- **A `NULL` argument or parameter now gives `NULL`, as in SQL**: SQLite reads
+  `NULL` as 0 through `sqlite3_value_double()`, so `stat_normal_cdf(NULL)`
+  returned 0.5, `stat_percentile(v, NULL)` the minimum and
+  `stat_t_cdf(1.0, NULL)` an error. Now every scalar function returns `NULL`
+  when any argument is `NULL` (like `abs(NULL)`), a parameterized aggregate
+  returns `NULL` when a parameter is `NULL`, and a window function returns
+  `NULL` on every row (like `lag(v, NULL)`). The optional `mu` and `sigma` of
+  the normal-distribution functions also give `NULL` when `NULL`; they take
+  their defaults only when left out. Omitting a parameter still selects its
+  default. `NULL` rows in the data are handled as before.
+
 ### Fixed
 
 - **The rolling window functions placed each window on the wrong row**:
@@ -179,6 +192,12 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Documentation
 
+- **`doc/nan_notes.md` / `-ja.md`** (new): how the SQL functions treat `NULL`,
+  NaN and Inf. Covers what SQLite can store (NaN becomes `NULL`), the
+  aggregates (`NULL` rows skipped, a NaN or Inf result returned as `NULL`), the
+  parameters and scalar arguments (`NULL` is read as 0, not as the default),
+  the window functions by kind, and Inf in rolling windows. Linked from the
+  function reference, the README and the mkdocs navigation.
 - **`doc/ref/parameterized_aggregates.md` / `-ja.md`**: Documented the range of validity of the
   `stat_ks_test()` p-value -- the underlying approximation is published for p <= 0.10, so a value
   above that (frequently exactly 1) indicates consistency with normality rather than an accurate

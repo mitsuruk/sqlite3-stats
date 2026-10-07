@@ -8,7 +8,7 @@ SQLite3 に **258 個の統計関数** を追加するロード可能な拡張�
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-blue.svg)](https://isocpp.org/)
 [![Platform](https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
 [![Tests](https://img.shields.io/badge/tests-266-brightgreen.svg)](https://github.com/mitsuruk/sqlite3-stats/actions/workflows/ci.yml)
-[![Google Test](https://img.shields.io/badge/Google%20Test-428%20passed-brightgreen.svg)](https://github.com/google/googletest)
+[![Google Test](https://img.shields.io/badge/Google%20Test-434%20passed-brightgreen.svg)](https://github.com/google/googletest)
 
 [English](README.md)
 
@@ -16,7 +16,7 @@ SQLite3 に **258 個の統計関数** を追加するロード可能な拡張�
 
 sqlite3-stats (旧称: sqlite3StatisticalLibrary) は、SQL から直接呼び出せる 258 個の統計関数を提供する SQLite3 のロード可能な拡張機能です。[statcpp](https://github.com/mitsuruk/statcpp)（386 個の関数を持つ C++17 ヘッダーオンリー統計ライブラリ）をベースに構築されており、統計機能の厳選されたサブセットをネイティブ SQL 関数として公開しています。
 
-全 258 関数は 266 件の結合テストおよび 428 件の Google Test 自動テストで検証済みです。
+全 258 関数は 266 件の結合テストおよび 434 件の Google Test 自動テストで検証済みです。
 
 ### 主な特徴
 
@@ -112,13 +112,13 @@ ctest --test-dir build --output-on-failure
 | テストファイル | 関数数 | テスト数 |
 |---|---|---|
 | basic_aggregates_test.cpp | 24 | 61 |
-| parameterized_aggregates_test.cpp | 20 | 49 |
+| parameterized_aggregates_test.cpp | 20 | 51 |
 | two_column_aggregates_test.cpp | 27 | 56 |
-| window_functions_test.cpp | 26 | 50 |
+| window_functions_test.cpp | 26 | 51 |
 | complex_aggregates_test.cpp | 41 | 80 |
-| scalar_tests_helpers_test.cpp | 38 | 42 |
-| scalar_distributions_test.cpp | 83 | 90 |
-| **合計** | **258** | **428** |
+| scalar_tests_helpers_test.cpp | 38 | 43 |
+| scalar_distributions_test.cpp | 83 | 92 |
+| **合計** | **258** | **434** |
 
 `stat_bonferroni` はウィンドウ関数形式とスカラー形式の両方を持つため両カテゴリ
 に計上しており、関数数の列は 258 個の名前に対して 259 件になる。
@@ -203,6 +203,7 @@ SELECT stat_n_t2(0.5, 0.05, 0.80);  -- 効果量=0.5, alpha=0.05, 検出力=0.80
 全 258 関数の詳細ドキュメント:
 
 - [関数リファレンス（ハブ）](doc/function_reference-ja.md)
+  - [NULL・NaN・Inf の注意事項](doc/nan_notes-ja.md)
   - [基本集約関数（24）](doc/ref/basic_aggregates-ja.md)
   - [パラメータ付き集約関数（20）](doc/ref/parameterized_aggregates-ja.md)
   - [2 カラム集約関数（27）](doc/ref/two_column_aggregates-ja.md)
@@ -234,6 +235,8 @@ sqlite3-stats/
 ├── doc/
 │   ├── function_reference.md              # 関数リファレンス（英語版）
 │   ├── function_reference-ja.md           # 関数リファレンス（日本語版）
+│   ├── nan_notes.md                       # NULL・NaN・Inf の注意事項（英語版）
+│   ├── nan_notes-ja.md                    # NULL・NaN・Inf の注意事項（日本語版）
 │   ├── sqlite3lib_LOAD_EXTENSION.md       # 拡張機能の実装ガイド（英語版）
 │   ├── sqlite3lib_LOAD_EXTENSION-ja.md    # 拡張機能の実装ガイド（日本語版）
 │   └── ref/                               # カテゴリ別の関数詳細

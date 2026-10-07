@@ -19,6 +19,7 @@ nav:
   - Home: index.md
   - English:
       - Function Reference: function_reference.md
+      - NULL, NaN and Inf Notes: nan_notes.md
       - Load Extension Guide: sqlite3lib_LOAD_EXTENSION.md
       - Changelog: CHANGELOG.md
       - Detailed Reference:
@@ -31,6 +32,7 @@ nav:
           - Scalar Distributions: ref/scalar_distributions.md
   - 日本語:
       - 関数リファレンス: function_reference-ja.md
+      - NULL・NaN・Inf の注意事項: nan_notes-ja.md
       - 拡張機能ロードガイド: sqlite3lib_LOAD_EXTENSION-ja.md
       - 変更履歴: CHANGELOG.md
       - 詳細リファレンス:

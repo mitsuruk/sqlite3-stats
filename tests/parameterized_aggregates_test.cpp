@@ -515,3 +515,33 @@ TEST_F(ParameterizedAggregates, ConnectionSurvivesInvalidAggregateArgument) {
     EXPECT_NEAR(query_double(db_, "SELECT stat_percentile(val, 0.5) FROM data"),
                 5.5, 1e-9);
 }
+
+// =====================================================================
+// NULL parameters (SQL convention: an unknown parameter gives NULL)
+// =====================================================================
+
+/// @brief A NULL parameter returns NULL instead of being read as 0
+TEST_F(ParameterizedAggregates, NullParameterReturnsNull) {
+    for (const char* sql : {
+             // one column, numeric result
+             "SELECT stat_percentile(val, NULL) FROM data",
+             "SELECT stat_trimmed_mean(val, NULL) FROM data",
+             // one column, JSON result
+             "SELECT stat_t_test(val, NULL) FROM data",
+             "SELECT stat_z_test(val, NULL, 1.0) FROM data",
+             // two columns, numeric result
+             "SELECT stat_weighted_percentile(val, wt, NULL) FROM wt_data",
+             // two columns (value, group), JSON result
+             "SELECT stat_tukey_hsd(val, grp, NULL) FROM grp_data",
+         }) {
+        EXPECT_TRUE(query_returns_null(db_, sql)) << sql;
+    }
+}
+
+/// @brief Leaving an optional parameter out still uses its default
+TEST_F(ParameterizedAggregates, OmittedParameterUsesDefault) {
+    EXPECT_FALSE(query_returns_null(db_, "SELECT stat_tukey_hsd(val, grp) FROM grp_data"));
+    EXPECT_NEAR(query_double(db_,
+                    "SELECT json_extract(stat_tukey_hsd(val, grp), '$.alpha') FROM grp_data"),
+                0.05, 1e-12);
+}

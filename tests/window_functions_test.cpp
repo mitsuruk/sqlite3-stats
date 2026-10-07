@@ -677,3 +677,16 @@ TEST_F(WindowFunctions, FillnaMedianTrueMedian) {
     expect_rows(ts_window(db_, "stat_fillna_median(val)"),
                 {10.0, 20.0, 45.0, 40.0, 50.0, 30.0, 70.0, 45.0, 90.0, 100.0});
 }
+
+/// @brief A NULL parameter makes every row NULL, as SQL's lag(v, NULL) does
+///        (it used to be read as 0 and replaced by a window or lag of 1)
+TEST_F(WindowFunctions, NullParameterReturnsNullRows) {
+    for (const char* call : {"stat_rolling_mean(val, NULL)", "stat_lag(val, NULL)",
+                             "stat_bin_width(val, NULL)"}) {
+        auto rows = ts_window(db_, call);
+        ASSERT_EQ(rows.size(), 10u) << call;
+        for (std::size_t i = 0; i < rows.size(); ++i) {
+            EXPECT_TRUE(std::isnan(rows[i])) << call << " row " << i + 1;
+        }
+    }
+}

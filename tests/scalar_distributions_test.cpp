@@ -674,3 +674,31 @@ TEST_F(ScalarDistributions, ConnectionSurvivesInvalidArgument) {
     query_error(db_, "SELECT stat_poisson_quantile(-1.0, 2.5)");
     EXPECT_NEAR(query_double(db_, "SELECT stat_normal_cdf(0.0)"), 0.5, 1e-12);
 }
+
+// =====================================================================
+// NULL arguments (SQL convention: a NULL argument gives NULL)
+// =====================================================================
+
+/// @brief Any NULL argument returns NULL instead of being read as 0
+TEST_F(ScalarDistributions, NullArgumentReturnsNull) {
+    for (const char* sql : {
+             "SELECT stat_normal_cdf(NULL)",
+             "SELECT stat_t_cdf(NULL, 5)",
+             "SELECT stat_t_cdf(1.0, NULL)",
+             "SELECT stat_chisq_quantile(NULL, 3)",
+             "SELECT stat_binomial_pmf(NULL, 10, 0.5)",
+             "SELECT stat_binomial_pmf(3, NULL, 0.5)",
+             "SELECT stat_binomial_pmf(3, 10, NULL)",
+         }) {
+        EXPECT_TRUE(query_returns_null(db_, sql)) << sql;
+    }
+}
+
+/// @brief The optional mu and sigma of the normal functions: NULL gives NULL,
+///        while leaving them out still uses the defaults 0 and 1
+TEST_F(ScalarDistributions, NormalOptionalParameters) {
+    EXPECT_TRUE(query_returns_null(db_, "SELECT stat_normal_pdf(0.5, NULL, 1.0)"));
+    EXPECT_TRUE(query_returns_null(db_, "SELECT stat_normal_pdf(0.5, 0.0, NULL)"));
+    EXPECT_NEAR(query_double(db_, "SELECT stat_normal_pdf(0.5)"), 0.3520653267642995, 1e-12);
+    EXPECT_NEAR(query_double(db_, "SELECT stat_normal_cdf(0.0)"), 0.5, 1e-12);
+}

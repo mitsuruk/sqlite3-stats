@@ -119,6 +119,29 @@ inline bool query_is_null(sqlite3* db, const char* sql) {
 }
 
 /**
+ * @brief Run a SELECT that must succeed and report whether its first column is NULL
+ *
+ * Unlike query_is_null, an error fails the test instead of counting as NULL, so a
+ * function that rejects its input cannot pass for one that returns NULL.
+ *
+ * @param db Database connection
+ * @param sql SELECT statement returning one row
+ * @return true if the first column of the first row is NULL
+ */
+inline bool query_returns_null(sqlite3* db, const char* sql) {
+    sqlite3_stmt* stmt = nullptr;
+    int rc = sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr);
+    EXPECT_EQ(rc, SQLITE_OK) << "prepare failed: " << sqlite3_errmsg(db)
+                              << "\n  SQL: " << sql;
+    rc = sqlite3_step(stmt);
+    EXPECT_EQ(rc, SQLITE_ROW) << "step failed: " << sqlite3_errmsg(db)
+                               << "\n  SQL: " << sql;
+    bool is_null = (rc == SQLITE_ROW) && (sqlite3_column_type(stmt, 0) == SQLITE_NULL);
+    sqlite3_finalize(stmt);
+    return is_null;
+}
+
+/**
  * @brief Assert that a SELECT fails and return the error message
  *
  * statcpp throws std::invalid_argument when an argument is out of range. If the
