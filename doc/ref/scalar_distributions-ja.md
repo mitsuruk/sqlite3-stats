@@ -188,6 +188,26 @@ SELECT stat_erf(1.0);           -- → 0.8427...
 SELECT stat_logarithmic_mean(2, 8);  -- 対数平均
 ```
 
+> **注意(statcpp の制限)**: `stat_lgamma` と `stat_tgamma` は、
+> Γ(x) < 0 となる負の非整数 x、つまり (-1, 0), (-3, -2), (-5, -4), ... で
+> `NULL` を返す。statcpp の `lgamma` は x < 0.5 で反射公式
+> log(π / sin(πx)) を使う。この区間では負の数の対数になって NaN となり、
+> 本拡張がその NaN を `NULL` に変換している。
+> `tgamma` は exp(`lgamma`) で計算されるので、負の値を返せない。
+> 正の x と、Γ(x) > 0 となる (-2, -1) などの区間は影響を受けない。
+> 0 と負の整数はエラーになる。
+>
+> SQLite にはガンマ関数が組み込まれていないので、負の引数では反射公式
+> Γ(x) = π / (sin(πx) Γ(1 − x)) を SQL で書く。`sin()`、`pi()`、`ln()` は
+> SQLite の数学関数(`SQLITE_ENABLE_MATH_FUNCTIONS`)が必要で、
+> 本プロジェクトがビルドする SQLite では有効になっている。
+>
+> ```sql
+> SELECT stat_tgamma(-0.5);                                       -- → NULL
+> SELECT pi() / (sin(pi() * -0.5) * stat_tgamma(1 - -0.5));       -- → -3.5449...
+> SELECT ln(pi() / abs(sin(pi() * -0.5))) - stat_lgamma(1 - -0.5);  -- → 1.2655...
+> ```
+
 ---
 
 ## 効果量変換・解釈
