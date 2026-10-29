@@ -14,8 +14,8 @@ statcpp はヘッダーオンリーであるため、コンパイルやリンク
 | 項目 | 詳細 |
 |------|------|
 | インストールディレクトリ | `${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp/statcpp-install` |
-| ダウンロード URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz |
-| バージョン | 0.5.0(タグ `v0.5.0`) |
+| ダウンロード URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.1.tar.gz |
+| バージョン | 0.5.1(タグ `v0.5.1`) |
 | ライセンス | MIT License |
 
 ---
@@ -44,7 +44,7 @@ project/
 │   ├── statcppCmake.md       # 英語版ドキュメント
 │   └── statcppCmake-jp.md    # このドキュメント
 ├── download/statcpp/
-│   ├── statcpp-v0.5.0.tar.gz # キャッシュされたアーカイブ
+│   ├── statcpp-v0.5.1.tar.gz # キャッシュされたアーカイブ
 │   └── statcpp-install/      # インストールされたヘッダー
 │       └── include/
 │           └── statcpp/
@@ -86,7 +86,7 @@ make
 ```cmake
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.5.0")
+set(STATCPP_VERSION "0.5.1")
 set(STATCPP_TAG "v${STATCPP_VERSION}")
 set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 ```
@@ -106,7 +106,7 @@ endif()
 | 条件 | アクション |
 |------|----------|
 | `statcpp-install/include/statcpp/statcpp.hpp` が存在 | すべてスキップ（キャッシュを使用） |
-| `statcpp-v0.5.0.tar.gz` が存在（インストールなし） | ダウンロードをスキップ、展開してインストール |
+| `statcpp-v0.5.1.tar.gz` が存在（インストールなし） | ダウンロードをスキップ、展開してインストール |
 | 何も存在しない | GitHub からダウンロード、展開してインストール |
 
 ### 3. ダウンロード（必要な場合）
@@ -367,8 +367,8 @@ statcpp::mean(first, last, projection);       // プロジェクション付き
 GitHub に接続できない場合、手動でダウンロードして配置できます：
 
 ```bash
-curl -L -o download/statcpp/statcpp-v0.5.0.tar.gz \
-    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz
+curl -L -o download/statcpp/statcpp-v0.5.1.tar.gz \
+    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.1.tar.gz
 ```
 
 その後 `cmake ..` を再実行すると、キャッシュされたアーカイブからインストールされます。

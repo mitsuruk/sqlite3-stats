@@ -145,6 +145,21 @@ This project follows [Semantic Versioning](https://semver.org/).
 
 ### Dependencies
 
+- **statcpp**: v0.5.0 -> v0.5.1, a security release that fixes
+  out-of-bounds reads, undefined behaviour and a hang. Results for valid
+  arguments are unchanged. Arguments that used to give undefined results now
+  raise an SQL error:
+  - `stat_bin_width()` with Inf in the data. A finite range too wide for a
+    double is now binned correctly;
+  - `stat_n_t1()`, `stat_n_t2()`, `stat_n_prop()`, `stat_n_moe_prop()` and
+    `stat_n_moe_mean()` when the sample size cannot be represented, for
+    example for an effect size or margin of error close to 0;
+  - `stat_poisson_quantile()` and `stat_nbinom_quantile()` with an infinite
+    parameter.
+
+  `stat_duniform_pmf()`, `stat_duniform_cdf()` and `stat_duniform_quantile()`
+  now give correct results when `b - a` overflows a 64-bit integer, and
+  `stat_beta_rand()` no longer hangs for extremely small shape parameters.
 - **statcpp**: v0.4.0 -> v0.5.0, which handles missing values (NaN) as R does
   throughout. In this library NaN reaches statcpp only in the window functions,
   where `NULL` rows are passed as NaN; the aggregate and scalar functions skip

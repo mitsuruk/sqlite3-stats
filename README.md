@@ -273,7 +273,7 @@ sqlite3-stats is part of the **statcpp family**. Choose the one that fits your u
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | Command-line interface for UNIX pipelines |
 | SQL (SQLite3) | **sqlite3-stats** (this repo) | SQLite3 loadable extension (258 functions) |
 
-**Required statcpp version**: v0.5.0 or later
+**Required statcpp version**: v0.5.1 or later
 
 ## Tested Environments
 

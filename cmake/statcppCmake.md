@@ -14,8 +14,8 @@ Since statcpp is header-only, no compilation or linking is required. Only the in
 | Item | Details |
 |------|---------|
 | Install Directory | `${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp/statcpp-install` |
-| Download URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz |
-| Version | 0.5.0 (tag `v0.5.0`) |
+| Download URL | https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.1.tar.gz |
+| Version | 0.5.1 (tag `v0.5.1`) |
 | License | MIT License |
 
 ---
@@ -44,7 +44,7 @@ project/
 │   ├── statcppCmake.md       # This document
 │   └── statcppCmake-jp.md    # Japanese version
 ├── download/statcpp/
-│   ├── statcpp-v0.5.0.tar.gz # Cached archive
+│   ├── statcpp-v0.5.1.tar.gz # Cached archive
 │   └── statcpp-install/      # Installed headers
 │       └── include/
 │           └── statcpp/
@@ -86,7 +86,7 @@ make
 ```cmake
 set(STATCPP_DOWNLOAD_DIR ${CMAKE_CURRENT_SOURCE_DIR}/download/statcpp)
 set(STATCPP_INSTALL_DIR ${STATCPP_DOWNLOAD_DIR}/statcpp-install)
-set(STATCPP_VERSION "0.5.0")
+set(STATCPP_VERSION "0.5.1")
 set(STATCPP_TAG "v${STATCPP_VERSION}")
 set(STATCPP_URL "https://github.com/mitsuruk/statcpp/archive/refs/tags/${STATCPP_TAG}.tar.gz")
 ```
@@ -106,7 +106,7 @@ The cache logic works as follows:
 | Condition | Action |
 |-----------|--------|
 | `statcpp-install/include/statcpp/statcpp.hpp` exists | Skip everything (use cached) |
-| `statcpp-v0.5.0.tar.gz` exists (install missing) | Skip download, extract and install |
+| `statcpp-v0.5.1.tar.gz` exists (install missing) | Skip download, extract and install |
 | Nothing exists | Download from GitHub, extract and install |
 
 ### 3. Download (if needed)
@@ -367,8 +367,8 @@ statcpp::mean(first, last, projection);       // With projection
 If GitHub is unreachable, you can manually download and place the archive:
 
 ```bash
-curl -L -o download/statcpp/statcpp-v0.5.0.tar.gz \
-    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.0.tar.gz
+curl -L -o download/statcpp/statcpp-v0.5.1.tar.gz \
+    https://github.com/mitsuruk/statcpp/archive/refs/tags/v0.5.1.tar.gz
 ```
 
 Then re-run `cmake ..` and the installation will proceed from the cached archive.

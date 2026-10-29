@@ -272,7 +272,7 @@ sqlite3-stats は **statcpp ファミリー** の一部です。用途に応じ�
 | UNIX CLI | [statcppCLI](https://github.com/mitsuruk/statcppCLI) | UNIX パイプライン向けコマンドラインツール |
 | SQL (SQLite3) | **sqlite3-stats** (このリポジトリ) | SQLite3 ロード可能な拡張機能 (258 関数) |
 
-**対応 statcpp バージョン**: v0.5.0 以降
+**対応 statcpp バージョン**: v0.5.1 以降
 
 ## 動作確認環境
 
