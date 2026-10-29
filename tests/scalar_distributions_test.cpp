@@ -676,6 +676,34 @@ TEST_F(ScalarDistributions, ConnectionSurvivesInvalidArgument) {
 }
 
 // =====================================================================
+// Unsigned results above INT64_MAX (statcpp returns uint64; SQL integers are signed)
+// =====================================================================
+
+/// @brief Error case: a sample size or quantile above INT64_MAX raises an SQL error
+///        instead of turning negative
+TEST_F(ScalarDistributions, ResultAboveInt64MaxRaisesSqlError) {
+    for (const char* sql : {
+             "SELECT stat_n_moe_mean(1.0, 1.767e9, 0.95)",  // about 1.2e19
+             "SELECT stat_n_t1(9e-10, 0.8, 0.05)",          // about 9.7e18
+             "SELECT stat_poisson_quantile(0.5, 1.2e19)",   // 1.2e19
+         }) {
+        std::string msg = query_error(db_, sql);
+        EXPECT_NE(msg.find("too large"), std::string::npos) << sql << " -> actual: " << msg;
+    }
+}
+
+/// @brief Boundary: a result just below INT64_MAX is returned as a positive integer
+TEST_F(ScalarDistributions, ResultBelowInt64MaxIsReturned) {
+    EXPECT_EQ(query_int(db_, "SELECT stat_n_moe_mean(1.0, 1e9, 0.95)"),
+              INT64_C(3841458826889394688));
+}
+
+/// @brief Edge case: the q = 1 sentinel of an unbounded quantile still maps to NULL
+TEST_F(ScalarDistributions, UnboundedQuantileSentinelStillNull) {
+    EXPECT_TRUE(query_is_null(db_, "SELECT stat_poisson_quantile(1.0, 2.5)"));
+}
+
+// =====================================================================
 // NULL arguments (SQL convention: a NULL argument gives NULL)
 // =====================================================================
 

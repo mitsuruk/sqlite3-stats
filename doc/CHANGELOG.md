@@ -143,6 +143,14 @@ This project follows [Semantic Versioning](https://semver.org/).
   Results for every valid argument are unchanged: all 266 integration examples produce identical
   output before and after, apart from the functions that draw random numbers.
 
+- **Integer results above INT64_MAX turned negative**: `stat_n_t1()`,
+  `stat_n_t2()`, `stat_n_prop()`, `stat_n_moe_prop()`, `stat_n_moe_mean()`,
+  `stat_poisson_quantile()`, `stat_geometric_quantile()` and
+  `stat_nbinom_quantile()` cast statcpp's unsigned result straight to a signed
+  64-bit integer, so a result above 9223372036854775807 came back negative
+  (for example `stat_n_moe_mean(1.0, 1.767e9, 0.95)`). Such a result now raises
+  an SQL error.
+
 ### Dependencies
 
 - **statcpp**: v0.5.0 -> v0.5.1, a security release that fixes
