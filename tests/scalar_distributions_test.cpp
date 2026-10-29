@@ -693,9 +693,10 @@ TEST_F(ScalarDistributions, ResultAboveInt64MaxRaisesSqlError) {
 }
 
 /// @brief Boundary: a result just below INT64_MAX is returned as a positive integer
+///        (the last digits depend on the platform's libm, so compare with a relative tolerance)
 TEST_F(ScalarDistributions, ResultBelowInt64MaxIsReturned) {
-    EXPECT_EQ(query_int(db_, "SELECT stat_n_moe_mean(1.0, 1e9, 0.95)"),
-              INT64_C(3841458826889394688));
+    const std::int64_t n = query_int(db_, "SELECT stat_n_moe_mean(1.0, 1e9, 0.95)");
+    EXPECT_NEAR(static_cast<double>(n), 3.841458826889394688e18, 3.841458826889394688e9);  // 1e-9 relative
 }
 
 /// @brief Edge case: the q = 1 sentinel of an unbounded quantile still maps to NULL
